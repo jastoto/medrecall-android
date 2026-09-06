@@ -1,4 +1,4 @@
-package asok.VezaMed.ui.theme
+package com.asok.medrecall.ui.theme
 
 import android.app.Activity
 import android.os.Build

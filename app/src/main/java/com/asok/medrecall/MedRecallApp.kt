@@ -1,0 +1,43 @@
+package com.asok.medrecall
+
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.asok.medrecall.navigation.Destination
+import com.asok.medrecall.ui.MedRecallBottomBar
+import com.asok.medrecall.ui.screens.HomeScreen
+import com.asok.medrecall.ui.screens.StubScreen
+
+@Composable
+fun MedRecallApp() {
+    val navController = rememberNavController()
+
+    Scaffold(bottomBar = { MedRecallBottomBar(navController) }) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Destination.Home.route,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable(Destination.Home.route) {
+                HomeScreen(onDestinationClick = { navController.navigate(it.route) })
+            }
+            composable(Destination.AskMedRecall.route) { StubScreen(Destination.AskMedRecall.label) }
+            composable(Destination.HelpHowTo.route) { StubScreen(Destination.HelpHowTo.label) }
+            composable(Destination.RecurringReminders.route) { StubScreen(Destination.RecurringReminders.label) }
+            composable(Destination.Settings.route) { StubScreen(Destination.Settings.label) }
+            composable(Destination.RecordVisit.route) { StubScreen(Destination.RecordVisit.label) }
+            composable(Destination.Doctors.route) { StubScreen(Destination.Doctors.label) }
+            composable(Destination.Medications.route) { StubScreen(Destination.Medications.label) }
+            composable(Destination.Vitals.route) { StubScreen(Destination.Vitals.label) }
+            composable(Destination.Health.route) { StubScreen(Destination.Health.label) }
+            composable(Destination.Conditions.route) { StubScreen(Destination.Conditions.label) }
+            composable(Destination.Reports.route) { StubScreen(Destination.Reports.label) }
+            composable(Destination.MedicalId.route) { StubScreen(Destination.MedicalId.label) }
+            composable(Destination.Calendar.route) { StubScreen(Destination.Calendar.label) }
+        }
+    }
+}

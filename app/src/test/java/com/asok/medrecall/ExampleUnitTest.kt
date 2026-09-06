@@ -1,4 +1,4 @@
-package asok.VezaMed
+package com.asok.medrecall
 
 import org.junit.Test
 

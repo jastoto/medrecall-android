@@ -1,4 +1,4 @@
-package asok.VezaMed.ui.theme
+package com.asok.medrecall.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
