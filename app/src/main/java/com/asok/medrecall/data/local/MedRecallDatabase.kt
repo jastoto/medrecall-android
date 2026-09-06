@@ -1,0 +1,38 @@
+package com.asok.medrecall.data.local
+
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import com.asok.medrecall.data.local.dao.AppointmentDao
+import com.asok.medrecall.data.local.dao.DoctorDao
+import com.asok.medrecall.data.local.dao.MedicationDao
+import com.asok.medrecall.data.local.dao.NoteDao
+import com.asok.medrecall.data.local.dao.PatientDao
+
+@Database(
+    entities = [Patient::class, Doctor::class, Appointment::class, Medication::class, Note::class],
+    version = 1,
+    exportSchema = false
+)
+abstract class MedRecallDatabase : RoomDatabase() {
+    abstract fun patientDao(): PatientDao
+    abstract fun doctorDao(): DoctorDao
+    abstract fun appointmentDao(): AppointmentDao
+    abstract fun medicationDao(): MedicationDao
+    abstract fun noteDao(): NoteDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: MedRecallDatabase? = null
+
+        fun getInstance(context: Context): MedRecallDatabase =
+            INSTANCE ?: synchronized(this) {
+                INSTANCE ?: Room.databaseBuilder(
+                    context.applicationContext,
+                    MedRecallDatabase::class.java,
+                    "medrecall.db"
+                ).build().also { INSTANCE = it }
+            }
+    }
+}
