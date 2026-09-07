@@ -13,6 +13,8 @@ import com.asok.medrecall.navigation.Destination
 import com.asok.medrecall.ui.MedRecallBottomBar
 import com.asok.medrecall.ui.appointments.AppointmentFormScreen
 import com.asok.medrecall.ui.appointments.AppointmentsScreen
+import com.asok.medrecall.ui.medications.MedicationFormScreen
+import com.asok.medrecall.ui.medications.MedicationsScreen
 import com.asok.medrecall.ui.screens.HomeScreen
 import com.asok.medrecall.ui.screens.StubScreen
 
@@ -35,7 +37,12 @@ fun MedRecallApp() {
             composable(Destination.Settings.route) { StubScreen(Destination.Settings.label) }
             composable(Destination.RecordVisit.route) { StubScreen(Destination.RecordVisit.label) }
             composable(Destination.Doctors.route) { StubScreen(Destination.Doctors.label) }
-            composable(Destination.Medications.route) { StubScreen(Destination.Medications.label) }
+            composable(Destination.Medications.route) {
+                MedicationsScreen(
+                    onAddMedication = { navController.navigate("medication_form") },
+                    onEditMedication = { id -> navController.navigate("medication_form/$id") }
+                )
+            }
             composable(Destination.Vitals.route) { StubScreen(Destination.Vitals.label) }
             composable(Destination.Health.route) { StubScreen(Destination.Health.label) }
             composable(Destination.Conditions.route) { StubScreen(Destination.Conditions.label) }
@@ -60,6 +67,22 @@ fun MedRecallApp() {
                 val id = backStackEntry.arguments?.getInt("appointmentId")
                 AppointmentFormScreen(
                     appointmentId = id,
+                    onDone = { navController.popBackStack() }
+                )
+            }
+            composable("medication_form") {
+                MedicationFormScreen(
+                    medicationId = null,
+                    onDone = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "medication_form/{medicationId}",
+                arguments = listOf(navArgument("medicationId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val id = backStackEntry.arguments?.getInt("medicationId")
+                MedicationFormScreen(
+                    medicationId = id,
                     onDone = { navController.popBackStack() }
                 )
             }
