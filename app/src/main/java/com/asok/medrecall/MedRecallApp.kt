@@ -22,6 +22,9 @@ import com.asok.medrecall.ui.medications.MedicationsScreen
 import com.asok.medrecall.ui.medicalid.MedicalIdFormScreen
 import com.asok.medrecall.ui.medicalid.MedicalIdScreen
 import com.asok.medrecall.ui.record.RecordVisitScreen
+import com.asok.medrecall.ui.reports.ReportDetailScreen
+import com.asok.medrecall.ui.reports.ReportsScreen
+import com.asok.medrecall.ui.reports.ReportType
 import com.asok.medrecall.ui.screens.HomeScreen
 import com.asok.medrecall.ui.screens.StubScreen
 
@@ -88,7 +91,20 @@ fun MedRecallApp() {
                 )
             }
             composable(Destination.Reports.route) {
-                StubScreen(Destination.Reports.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+                ReportsScreen(
+                    onSelectReport = { reportType -> navController.navigate("report_detail/${reportType.id}") },
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                )
+            }
+            composable(
+                route = "report_detail/{reportTypeId}",
+                arguments = listOf(navArgument("reportTypeId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val reportTypeId = backStackEntry.arguments?.getString("reportTypeId") ?: ReportType.HISTORY.id
+                ReportDetailScreen(
+                    reportType = ReportType.fromId(reportTypeId),
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                )
             }
             composable(Destination.MedicalId.route) {
                 MedicalIdScreen(
