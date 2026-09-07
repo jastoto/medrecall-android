@@ -35,7 +35,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -112,13 +115,21 @@ private fun CurrentMedicationsCard(medications: List<Medication>) {
                 )
             } else {
                 medications.forEachIndexed { index, medication ->
-                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                        Text(text = medication.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        val details = listOfNotNull(medication.dosage, medication.schedule).joinToString(" \u00b7 ")
+                    val details = listOfNotNull(medication.dosage, medication.schedule).joinToString(" \u00b7 ")
+                    val line = buildAnnotatedString {
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append(medication.name)
+                        }
                         if (details.isNotBlank()) {
-                            Text(text = details, style = MaterialTheme.typography.bodyMedium)
+                            append("  \u2014 ")
+                            append(details)
                         }
                     }
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(vertical = 6.dp)
+                    )
                     if (index < medications.lastIndex) {
                         HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
                     }
