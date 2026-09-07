@@ -18,20 +18,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,6 +44,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.asok.medrecall.ui.components.MedRecallTopBar
 
 /**
  * Generic detail screen reused for every report type: a preview tile +
@@ -70,13 +68,9 @@ fun ReportDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(reportType.title) },
-                navigationIcon = {
-                    IconButton(onClick = onGoHome) {
-                        Icon(Icons.Default.Home, contentDescription = "Home")
-                    }
-                }
+            MedRecallTopBar(
+                title = reportType.title,
+                onGoHome = onGoHome
             )
         }
     ) { innerPadding ->

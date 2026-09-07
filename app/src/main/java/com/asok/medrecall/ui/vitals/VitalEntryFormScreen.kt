@@ -27,7 +27,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -49,6 +49,8 @@ import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 
 private val glucoseContextOptions = listOf("Fasting", "Before Meal", "After Meal", "Other")
 
@@ -107,7 +109,7 @@ fun VitalEntryFormScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(if (readingId == null) "Log ${vitalType.title}" else "Edit ${vitalType.title}") })
+            CenterAlignedTopAppBar(title = { Text(if (readingId == null) "Log ${vitalType.title}" else "Edit ${vitalType.title}", fontWeight = FontWeight.Bold, color = Color.Black) })
         }
     ) { innerPadding ->
         Column(

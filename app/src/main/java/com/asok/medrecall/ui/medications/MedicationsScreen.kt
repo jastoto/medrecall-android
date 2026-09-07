@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,7 +25,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,8 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.asok.medrecall.data.local.Doctor
 import com.asok.medrecall.data.local.Medication
+import com.asok.medrecall.ui.components.MedRecallTopBar
 
 private val tileColors = listOf(
     Color(0xFFE0435A), // red
@@ -65,13 +63,9 @@ fun MedicationsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Medications") },
-                navigationIcon = {
-                    IconButton(onClick = onGoHome) {
-                        Icon(Icons.Default.Home, contentDescription = "Home")
-                    }
-                },
+            MedRecallTopBar(
+                title = "Medications",
+                onGoHome = onGoHome,
                 actions = {
                     IconButton(onClick = onAddMedication) {
                         Icon(Icons.Default.Add, contentDescription = "Add medication")
@@ -163,6 +157,7 @@ private fun MedicationRow(medication: Medication, onClick: () -> Unit) {
             Text(
                 text = medication.name,
                 style = MaterialTheme.typography.titleMedium,
+                color = Color.Black,
                 textDecoration = if (medication.active) TextDecoration.None else TextDecoration.LineThrough
             )
             val details = listOfNotNull(medication.dosage, medication.schedule).joinToString(" · ")

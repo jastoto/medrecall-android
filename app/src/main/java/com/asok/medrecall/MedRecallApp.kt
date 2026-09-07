@@ -1,9 +1,19 @@
 package com.asok.medrecall
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,6 +27,8 @@ import com.asok.medrecall.ui.conditions.ConditionFormScreen
 import com.asok.medrecall.ui.conditions.ConditionsScreen
 import com.asok.medrecall.ui.doctors.DoctorFormScreen
 import com.asok.medrecall.ui.doctors.DoctorsScreen
+import com.asok.medrecall.ui.lock.AppLockViewModel
+import com.asok.medrecall.ui.lock.LockScreen
 import com.asok.medrecall.ui.medications.MedicationFormScreen
 import com.asok.medrecall.ui.medications.MedicationsScreen
 import com.asok.medrecall.ui.medicalid.MedicalIdFormScreen
@@ -27,13 +39,49 @@ import com.asok.medrecall.ui.reports.ReportsScreen
 import com.asok.medrecall.ui.reports.ReportType
 import com.asok.medrecall.ui.screens.HomeScreen
 import com.asok.medrecall.ui.screens.StubScreen
+import com.asok.medrecall.ui.settings.AccountScreen
+import com.asok.medrecall.ui.settings.BackupRestoreScreen
+import com.asok.medrecall.ui.settings.PinSetupScreen
+import com.asok.medrecall.ui.settings.SettingsScreen
 import com.asok.medrecall.ui.vitals.VitalDetailScreen
 import com.asok.medrecall.ui.vitals.VitalEntryFormScreen
 import com.asok.medrecall.ui.vitals.VitalType
 import com.asok.medrecall.ui.vitals.VitalsScreen
 
+/**
+ * Top-level composable: gates the whole app behind [LockScreen] whenever
+ * Settings > Security has Biometric Lock and/or a PIN turned on (see
+ * ui/lock/AppLockViewModel.kt), then hosts the real NavHost once unlocked.
+ * Re-locks itself every time the app is backgrounded (ON_STOP) so coming
+ * back to MedRecall+ always re-challenges.
+ */
 @Composable
 fun MedRecallApp() {
+    val appLockViewModel: AppLockViewModel = viewModel(factory = AppLockViewModel.factory(LocalContext.current))
+    val lockState by appLockViewModel.uiState.collectAsState()
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) appLockViewModel.relock()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    when {
+        lockState.isLoading -> Box(modifier = Modifier.fillMaxSize())
+        !lockState.isUnlocked -> LockScreen(
+            uiState = lockState,
+            onVerifyPin = { pin -> appLockViewModel.verifyPin(pin) },
+            onUnlocked = { appLockViewModel.markUnlocked() }
+        )
+        else -> MedRecallNavHost()
+    }
+}
+
+@Composable
+private fun MedRecallNavHost() {
     val navController = rememberNavController()
 
     Scaffold(bottomBar = { MedRecallBottomBar(navController) }) { innerPadding ->
@@ -55,7 +103,24 @@ fun MedRecallApp() {
                 StubScreen(Destination.RecurringReminders.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
             }
             composable(Destination.Settings.route) {
-                StubScreen(Destination.Settings.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+                SettingsScreen(
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) },
+                    onOpenAccount = { navController.navigate("settings_account") },
+                    onOpenBackupRestore = { navController.navigate("settings_backup_restore") },
+                    onOpenPinSetup = { navController.navigate("settings_pin_setup") }
+                )
+            }
+            composable("settings_account") {
+                AccountScreen(onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+            }
+            composable("settings_backup_restore") {
+                BackupRestoreScreen(onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+            }
+            composable("settings_pin_setup") {
+                PinSetupScreen(
+                    onDone = { navController.popBackStack() },
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                )
             }
             composable(Destination.RecordVisit.route) {
                 RecordVisitScreen(

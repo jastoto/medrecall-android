@@ -22,7 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -45,6 +45,8 @@ import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,7 +89,7 @@ fun AppointmentFormScreen(
     if (!loadedExisting) return
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(if (appointmentId == null) "New Appointment" else "Edit Appointment") }) }
+        topBar = { CenterAlignedTopAppBar(title = { Text(if (appointmentId == null) "New Appointment" else "Edit Appointment", fontWeight = FontWeight.Bold, color = Color.Black) }) }
     ) { innerPadding ->
         Column(
             modifier = Modifier

@@ -34,6 +34,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -48,6 +49,9 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.10.0")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.health.connect:connect-client:1.1.0")
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

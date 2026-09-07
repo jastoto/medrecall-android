@@ -13,7 +13,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.asok.medrecall.data.local.Doctor
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,7 +64,7 @@ fun DoctorFormScreen(
     if (!loadedExisting) return
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(if (doctorId == null) "New Doctor" else "Edit Doctor") }) }
+        topBar = { CenterAlignedTopAppBar(title = { Text(if (doctorId == null) "New Doctor" else "Edit Doctor", fontWeight = FontWeight.Bold, color = Color.Black) }) }
     ) { innerPadding ->
         Column(
             modifier = Modifier

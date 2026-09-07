@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -22,7 +21,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,6 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.asok.medrecall.ui.components.MedRecallTopBar
 
 /**
  * Lists readings for one vital, merging manual Room entries with whatever
@@ -68,13 +67,9 @@ fun VitalDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(vitalType.title) },
-                navigationIcon = {
-                    IconButton(onClick = onGoHome) {
-                        Icon(Icons.Default.Home, contentDescription = "Home")
-                    }
-                },
+            MedRecallTopBar(
+                title = vitalType.title,
+                onGoHome = onGoHome,
                 actions = {
                     IconButton(onClick = onAddReading) {
                         Icon(Icons.Default.Add, contentDescription = "Log a reading")

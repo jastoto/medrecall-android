@@ -50,6 +50,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.asok.medrecall.data.local.Condition
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import androidx.compose.ui.text.font.FontWeight
 
 private val statusOptions = listOf("Active", "Monitoring", "Resolved")
 
@@ -106,7 +107,7 @@ fun ConditionFormScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(if (conditionId == null) "Add Condition" else "Edit Condition") },
+                title = { Text(if (conditionId == null) "Add Condition" else "Edit Condition", fontWeight = FontWeight.Bold, color = Color.Black) },
                 navigationIcon = {
                     TextButton(onClick = onDone) { Text("Cancel") }
                 },

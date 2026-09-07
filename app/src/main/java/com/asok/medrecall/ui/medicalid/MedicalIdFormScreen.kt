@@ -26,7 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,6 +48,8 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 
 private val bloodTypeOptions = listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Unknown")
 
@@ -112,7 +114,7 @@ fun MedicalIdFormScreen(
     if (!loadedExisting) return
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Edit Medical ID") }) }
+        topBar = { CenterAlignedTopAppBar(title = { Text("Edit Medical ID", fontWeight = FontWeight.Bold, color = Color.Black) }) }
     ) { innerPadding ->
         Column(
             modifier = Modifier

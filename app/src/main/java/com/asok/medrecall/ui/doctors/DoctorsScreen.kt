@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,7 +26,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -44,6 +41,7 @@ import com.asok.medrecall.data.local.Doctor
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.asok.medrecall.ui.components.MedRecallTopBar
 
 private val tileColors = listOf(
     Color(0xFFE0435A), // red
@@ -70,13 +68,9 @@ fun DoctorsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Doctors") },
-                navigationIcon = {
-                    IconButton(onClick = onGoHome) {
-                        Icon(Icons.Default.Home, contentDescription = "Home")
-                    }
-                },
+            MedRecallTopBar(
+                title = "Doctors",
+                onGoHome = onGoHome,
                 actions = {
                     IconButton(onClick = onAddDoctor) {
                         Icon(Icons.Default.Add, contentDescription = "Add doctor")
@@ -192,6 +186,7 @@ private fun DoctorTile(doctor: Doctor, onClick: () -> Unit, modifier: Modifier =
         Text(
             doctor.name,
             style = MaterialTheme.typography.labelLarge,
+            color = Color.Black,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 4.dp)

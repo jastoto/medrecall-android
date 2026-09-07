@@ -30,10 +30,22 @@ sealed class Destination(
     val tileColors: List<Color> = listOf(Color(0xFF6650A4), Color(0xFF4A3880))
 ) {
     data object Home : Destination("home", "Home", Icons.Default.Home)
-    data object AskMedRecall : Destination("ask_medrecall", "Ask MedRecall", Icons.Default.Chat)
-    data object HelpHowTo : Destination("help_how_to", "Help & How-To", Icons.Default.HelpOutline)
-    data object RecurringReminders : Destination("recurring_reminders", "Recurring Reminders", Icons.Default.Notifications)
-    data object Settings : Destination("settings", "Settings", Icons.Default.Settings)
+    data object AskMedRecall : Destination(
+        "ask_medrecall", "Ask MedRecall", Icons.Default.Chat,
+        tileColors = listOf(Color(0xFF4FD1C5), Color(0xFF2CA893))
+    )
+    data object HelpHowTo : Destination(
+        "help_how_to", "Help & How-To", Icons.Default.HelpOutline,
+        tileColors = listOf(Color(0xFFF0B429), Color(0xFFC98C0A))
+    )
+    data object RecurringReminders : Destination(
+        "recurring_reminders", "Recurring Reminders", Icons.Default.Notifications,
+        tileColors = listOf(Color(0xFFFF9D5C), Color(0xFFE87F2E))
+    )
+    data object Settings : Destination(
+        "settings", "Settings", Icons.Default.Settings,
+        tileColors = listOf(Color(0xFF8A94A6), Color(0xFF5C6672))
+    )
 
     data object RecordVisit : Destination(
         "record_visit", "Record Visit", Icons.Default.Mic,
