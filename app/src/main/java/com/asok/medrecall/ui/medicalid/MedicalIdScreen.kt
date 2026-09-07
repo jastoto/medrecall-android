@@ -16,10 +16,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -38,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.asok.medrecall.data.local.Medication
 import com.asok.medrecall.navigation.Destination
 import java.time.Instant
 import java.time.ZoneId
@@ -86,6 +89,41 @@ fun MedicalIdScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             MedicalIdCard(uiState = uiState)
+            Spacer(modifier = Modifier.height(20.dp))
+            CurrentMedicationsCard(medications = uiState.medications)
+        }
+    }
+}
+
+@Composable
+private fun CurrentMedicationsCard(medications: List<Medication>) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "Current Medications",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            if (medications.isEmpty()) {
+                Text(
+                    text = "No active medications on file",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                medications.forEachIndexed { index, medication ->
+                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                        Text(text = medication.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        val details = listOfNotNull(medication.dosage, medication.schedule).joinToString(" \u00b7 ")
+                        if (details.isNotBlank()) {
+                            Text(text = details, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                    if (index < medications.lastIndex) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+                    }
+                }
+            }
         }
     }
 }
@@ -165,10 +203,11 @@ private fun MedicalIdCard(uiState: MedicalIdUiState) {
         CardDivider()
 
         SectionLabel("Conditions")
-        if (uiState.conditions.isEmpty()) {
+        val medicalIdConditions = uiState.medicalIdConditions
+        if (medicalIdConditions.isEmpty()) {
             Text(text = "None on file", color = Color.White, fontSize = 16.sp)
         } else {
-            uiState.conditions.forEach { condition ->
+            medicalIdConditions.forEach { condition ->
                 Text(
                     text = condition.name,
                     color = Color.White,

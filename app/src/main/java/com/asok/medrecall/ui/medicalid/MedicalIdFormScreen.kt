@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
@@ -35,10 +36,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.asok.medrecall.data.local.Condition
 import com.asok.medrecall.data.local.Patient
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -189,6 +192,31 @@ fun MedicalIdFormScreen(
                 }
             }
 
+            SectionHeader("Conditions on Medical ID")
+            Text(
+                text = "Choose which conditions from your Conditions list show up on the card.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            if (uiState.conditions.isEmpty()) {
+                Text(
+                    text = "No conditions on file yet -- add some from the Conditions screen first.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                uiState.conditions.forEach { condition ->
+                    ConditionToggleRow(
+                        condition = condition,
+                        onToggle = { checked ->
+                            coroutineScope.launch {
+                                viewModel.setConditionIncluded(condition, checked)
+                            }
+                        }
+                    )
+                }
+            }
+
             SectionHeader("Allergies")
 
             OutlinedTextField(
@@ -296,3 +324,15 @@ private fun formatDate(epochMillis: Long): String {
     val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
     return Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).format(formatter)
 }
+
+@Composable
+private fun ConditionToggleRow(condition: Condition, onToggle: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Checkbox(checked = condition.includedInMedicalId, onCheckedChange = onToggle)
+        Text(text = condition.name)
+    }
+}
+

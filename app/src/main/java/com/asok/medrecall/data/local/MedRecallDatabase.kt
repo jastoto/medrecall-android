@@ -13,7 +13,7 @@ import com.asok.medrecall.data.local.dao.PatientDao
 
 @Database(
     entities = [Patient::class, Doctor::class, Appointment::class, Medication::class, Note::class, Condition::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class MedRecallDatabase : RoomDatabase() {
