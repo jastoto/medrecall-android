@@ -13,10 +13,14 @@ import com.asok.medrecall.navigation.Destination
 import com.asok.medrecall.ui.MedRecallBottomBar
 import com.asok.medrecall.ui.appointments.AppointmentFormScreen
 import com.asok.medrecall.ui.appointments.AppointmentsScreen
+import com.asok.medrecall.ui.conditions.ConditionFormScreen
+import com.asok.medrecall.ui.conditions.ConditionsScreen
 import com.asok.medrecall.ui.doctors.DoctorFormScreen
 import com.asok.medrecall.ui.doctors.DoctorsScreen
 import com.asok.medrecall.ui.medications.MedicationFormScreen
 import com.asok.medrecall.ui.medications.MedicationsScreen
+import com.asok.medrecall.ui.medicalid.MedicalIdFormScreen
+import com.asok.medrecall.ui.medicalid.MedicalIdScreen
 import com.asok.medrecall.ui.record.RecordVisitScreen
 import com.asok.medrecall.ui.screens.HomeScreen
 import com.asok.medrecall.ui.screens.StubScreen
@@ -34,10 +38,18 @@ fun MedRecallApp() {
             composable(Destination.Home.route) {
                 HomeScreen(onDestinationClick = { navController.navigate(it.route) })
             }
-            composable(Destination.AskMedRecall.route) { StubScreen(Destination.AskMedRecall.label) }
-            composable(Destination.HelpHowTo.route) { StubScreen(Destination.HelpHowTo.label) }
-            composable(Destination.RecurringReminders.route) { StubScreen(Destination.RecurringReminders.label) }
-            composable(Destination.Settings.route) { StubScreen(Destination.Settings.label) }
+            composable(Destination.AskMedRecall.route) {
+                StubScreen(Destination.AskMedRecall.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+            }
+            composable(Destination.HelpHowTo.route) {
+                StubScreen(Destination.HelpHowTo.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+            }
+            composable(Destination.RecurringReminders.route) {
+                StubScreen(Destination.RecurringReminders.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+            }
+            composable(Destination.Settings.route) {
+                StubScreen(Destination.Settings.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+            }
             composable(Destination.RecordVisit.route) {
                 RecordVisitScreen(
                     onOpenCalendar = { navController.navigate(Destination.Calendar.route) },
@@ -62,11 +74,28 @@ fun MedRecallApp() {
                     onGoHome = { navController.popBackStack(Destination.Home.route, false) }
                 )
             }
-            composable(Destination.Vitals.route) { StubScreen(Destination.Vitals.label) }
-            composable(Destination.Health.route) { StubScreen(Destination.Health.label) }
-            composable(Destination.Conditions.route) { StubScreen(Destination.Conditions.label) }
-            composable(Destination.Reports.route) { StubScreen(Destination.Reports.label) }
-            composable(Destination.MedicalId.route) { StubScreen(Destination.MedicalId.label) }
+            composable(Destination.Vitals.route) {
+                StubScreen(Destination.Vitals.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+            }
+            composable(Destination.Health.route) {
+                StubScreen(Destination.Health.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+            }
+            composable(Destination.Conditions.route) {
+                ConditionsScreen(
+                    onAddCondition = { navController.navigate("condition_form") },
+                    onEditCondition = { id -> navController.navigate("condition_form/$id") },
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                )
+            }
+            composable(Destination.Reports.route) {
+                StubScreen(Destination.Reports.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+            }
+            composable(Destination.MedicalId.route) {
+                MedicalIdScreen(
+                    onEdit = { navController.navigate("medical_id_form") },
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                )
+            }
             composable(Destination.Calendar.route) {
                 AppointmentsScreen(
                     onAddAppointment = { navController.navigate("appointment_form") },
@@ -122,7 +151,28 @@ fun MedRecallApp() {
                     onDone = { navController.popBackStack() }
                 )
             }
-            composable("import_stub") { StubScreen("Import") }
+            composable("condition_form") {
+                ConditionFormScreen(
+                    conditionId = null,
+                    onDone = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "condition_form/{conditionId}",
+                arguments = listOf(navArgument("conditionId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val id = backStackEntry.arguments?.getInt("conditionId")
+                ConditionFormScreen(
+                    conditionId = id,
+                    onDone = { navController.popBackStack() }
+                )
+            }
+            composable("medical_id_form") {
+                MedicalIdFormScreen(onDone = { navController.popBackStack() })
+            }
+            composable("import_stub") {
+                StubScreen("Import", onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+            }
         }
     }
 }

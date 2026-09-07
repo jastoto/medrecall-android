@@ -73,8 +73,11 @@ sealed class Destination(
     )
 }
 
+// Home lives only as the top-left icon on every screen's top bar (see
+// RaisedIconTile-style screens' TopAppBar navigationIcon / StubScreen) --
+// it is intentionally NOT one of the bottom nav tabs.
 val bottomNavDestinations = listOf(
-    Destination.Home, Destination.AskMedRecall, Destination.HelpHowTo,
+    Destination.AskMedRecall, Destination.HelpHowTo,
     Destination.RecurringReminders, Destination.Settings
 )
 

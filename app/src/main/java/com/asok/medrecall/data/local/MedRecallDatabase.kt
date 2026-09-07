@@ -5,14 +5,15 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.asok.medrecall.data.local.dao.AppointmentDao
+import com.asok.medrecall.data.local.dao.ConditionDao
 import com.asok.medrecall.data.local.dao.DoctorDao
 import com.asok.medrecall.data.local.dao.MedicationDao
 import com.asok.medrecall.data.local.dao.NoteDao
 import com.asok.medrecall.data.local.dao.PatientDao
 
 @Database(
-    entities = [Patient::class, Doctor::class, Appointment::class, Medication::class, Note::class],
-    version = 2,
+    entities = [Patient::class, Doctor::class, Appointment::class, Medication::class, Note::class, Condition::class],
+    version = 4,
     exportSchema = false
 )
 abstract class MedRecallDatabase : RoomDatabase() {
@@ -21,6 +22,7 @@ abstract class MedRecallDatabase : RoomDatabase() {
     abstract fun appointmentDao(): AppointmentDao
     abstract fun medicationDao(): MedicationDao
     abstract fun noteDao(): NoteDao
+    abstract fun conditionDao(): ConditionDao
 
     companion object {
         @Volatile
