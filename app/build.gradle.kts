@@ -47,6 +47,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation("androidx.navigation:navigation-compose:2.10.0")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.health.connect:connect-client:1.1.0")
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

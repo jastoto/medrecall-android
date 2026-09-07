@@ -10,10 +10,11 @@ import com.asok.medrecall.data.local.dao.DoctorDao
 import com.asok.medrecall.data.local.dao.MedicationDao
 import com.asok.medrecall.data.local.dao.NoteDao
 import com.asok.medrecall.data.local.dao.PatientDao
+import com.asok.medrecall.data.local.dao.VitalReadingDao
 
 @Database(
-    entities = [Patient::class, Doctor::class, Appointment::class, Medication::class, Note::class, Condition::class],
-    version = 5,
+    entities = [Patient::class, Doctor::class, Appointment::class, Medication::class, Note::class, Condition::class, VitalReading::class],
+    version = 6,
     exportSchema = false
 )
 abstract class MedRecallDatabase : RoomDatabase() {
@@ -23,6 +24,7 @@ abstract class MedRecallDatabase : RoomDatabase() {
     abstract fun medicationDao(): MedicationDao
     abstract fun noteDao(): NoteDao
     abstract fun conditionDao(): ConditionDao
+    abstract fun vitalReadingDao(): VitalReadingDao
 
     companion object {
         @Volatile

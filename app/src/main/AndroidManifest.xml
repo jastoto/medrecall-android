@@ -4,10 +4,24 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Health Connect (Android's equivalent to Apple Health) read permissions
+         for the Vitals feature: see data/health/HealthConnectManager.kt.
+         MedRecall only ever reads; there are no matching WRITE_* permissions. -->
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
+    <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <uses-permission android:name="android.permission.health.READ_RESPIRATORY_RATE" />
+    <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE" />
+    <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
+        <package android:name="com.google.android.apps.healthdata" />
     </queries>
 
     <application

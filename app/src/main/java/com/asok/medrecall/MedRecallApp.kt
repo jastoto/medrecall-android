@@ -27,6 +27,10 @@ import com.asok.medrecall.ui.reports.ReportsScreen
 import com.asok.medrecall.ui.reports.ReportType
 import com.asok.medrecall.ui.screens.HomeScreen
 import com.asok.medrecall.ui.screens.StubScreen
+import com.asok.medrecall.ui.vitals.VitalDetailScreen
+import com.asok.medrecall.ui.vitals.VitalEntryFormScreen
+import com.asok.medrecall.ui.vitals.VitalType
+import com.asok.medrecall.ui.vitals.VitalsScreen
 
 @Composable
 fun MedRecallApp() {
@@ -78,7 +82,48 @@ fun MedRecallApp() {
                 )
             }
             composable(Destination.Vitals.route) {
-                StubScreen(Destination.Vitals.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+                VitalsScreen(
+                    onSelectVital = { vitalType -> navController.navigate("vital_detail/${vitalType.id}") },
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                )
+            }
+            composable(
+                route = "vital_detail/{vitalTypeId}",
+                arguments = listOf(navArgument("vitalTypeId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val vitalType = VitalType.fromId(backStackEntry.arguments?.getString("vitalTypeId") ?: VitalType.entries.first().id)
+                VitalDetailScreen(
+                    vitalType = vitalType,
+                    onAddReading = { navController.navigate("vital_form/${vitalType.id}") },
+                    onEditReading = { id -> navController.navigate("vital_form/${vitalType.id}/$id") },
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                )
+            }
+            composable(
+                route = "vital_form/{vitalTypeId}",
+                arguments = listOf(navArgument("vitalTypeId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val vitalType = VitalType.fromId(backStackEntry.arguments?.getString("vitalTypeId") ?: VitalType.entries.first().id)
+                VitalEntryFormScreen(
+                    vitalType = vitalType,
+                    readingId = null,
+                    onDone = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "vital_form/{vitalTypeId}/{readingId}",
+                arguments = listOf(
+                    navArgument("vitalTypeId") { type = NavType.StringType },
+                    navArgument("readingId") { type = NavType.IntType }
+                )
+            ) { backStackEntry ->
+                val vitalType = VitalType.fromId(backStackEntry.arguments?.getString("vitalTypeId") ?: VitalType.entries.first().id)
+                val readingId = backStackEntry.arguments?.getInt("readingId")
+                VitalEntryFormScreen(
+                    vitalType = vitalType,
+                    readingId = readingId,
+                    onDone = { navController.popBackStack() }
+                )
             }
             composable(Destination.Health.route) {
                 StubScreen(Destination.Health.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
