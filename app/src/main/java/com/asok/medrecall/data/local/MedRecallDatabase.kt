@@ -12,7 +12,7 @@ import com.asok.medrecall.data.local.dao.PatientDao
 
 @Database(
     entities = [Patient::class, Doctor::class, Appointment::class, Medication::class, Note::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class MedRecallDatabase : RoomDatabase() {
@@ -32,7 +32,13 @@ abstract class MedRecallDatabase : RoomDatabase() {
                     context.applicationContext,
                     MedRecallDatabase::class.java,
                     "medrecall.db"
-                ).build().also { INSTANCE = it }
+                )
+                    // No migrations written yet — fine while we're still shaping the schema
+                    // during early development. Revisit before this ships for real, since this
+                    // wipes the local db on every version bump instead of preserving data.
+                    .fallbackToDestructiveMigration(dropAllTables = true)
+                    .build()
+                    .also { INSTANCE = it }
             }
     }
 }

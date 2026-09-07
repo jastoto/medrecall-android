@@ -9,5 +9,6 @@ data class Note(
     val title: String,
     val body: String,
     val createdAt: Long,
-    val appointmentId: Int? = null
+    val appointmentId: Int? = null,
+    val doctorId: Int? = null
 )

@@ -13,8 +13,11 @@ import com.asok.medrecall.navigation.Destination
 import com.asok.medrecall.ui.MedRecallBottomBar
 import com.asok.medrecall.ui.appointments.AppointmentFormScreen
 import com.asok.medrecall.ui.appointments.AppointmentsScreen
+import com.asok.medrecall.ui.doctors.DoctorFormScreen
+import com.asok.medrecall.ui.doctors.DoctorsScreen
 import com.asok.medrecall.ui.medications.MedicationFormScreen
 import com.asok.medrecall.ui.medications.MedicationsScreen
+import com.asok.medrecall.ui.record.RecordVisitScreen
 import com.asok.medrecall.ui.screens.HomeScreen
 import com.asok.medrecall.ui.screens.StubScreen
 
@@ -35,12 +38,28 @@ fun MedRecallApp() {
             composable(Destination.HelpHowTo.route) { StubScreen(Destination.HelpHowTo.label) }
             composable(Destination.RecurringReminders.route) { StubScreen(Destination.RecurringReminders.label) }
             composable(Destination.Settings.route) { StubScreen(Destination.Settings.label) }
-            composable(Destination.RecordVisit.route) { StubScreen(Destination.RecordVisit.label) }
-            composable(Destination.Doctors.route) { StubScreen(Destination.Doctors.label) }
+            composable(Destination.RecordVisit.route) {
+                RecordVisitScreen(
+                    onOpenCalendar = { navController.navigate(Destination.Calendar.route) },
+                    onScheduleAppointment = { navController.navigate("appointment_form") },
+                    onOpenImport = { navController.navigate("import_stub") },
+                    onAddDoctor = { navController.navigate("doctor_form") },
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                )
+            }
+            composable(Destination.Doctors.route) {
+                DoctorsScreen(
+                    onAddDoctor = { navController.navigate("doctor_form") },
+                    onEditDoctor = { id -> navController.navigate("doctor_form/$id") },
+                    onEditAppointment = { id -> navController.navigate("appointment_form/$id") },
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                )
+            }
             composable(Destination.Medications.route) {
                 MedicationsScreen(
                     onAddMedication = { navController.navigate("medication_form") },
-                    onEditMedication = { id -> navController.navigate("medication_form/$id") }
+                    onEditMedication = { id -> navController.navigate("medication_form/$id") },
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
                 )
             }
             composable(Destination.Vitals.route) { StubScreen(Destination.Vitals.label) }
@@ -51,7 +70,8 @@ fun MedRecallApp() {
             composable(Destination.Calendar.route) {
                 AppointmentsScreen(
                     onAddAppointment = { navController.navigate("appointment_form") },
-                    onEditAppointment = { id -> navController.navigate("appointment_form/$id") }
+                    onEditAppointment = { id -> navController.navigate("appointment_form/$id") },
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
                 )
             }
             composable("appointment_form") {
@@ -86,6 +106,23 @@ fun MedRecallApp() {
                     onDone = { navController.popBackStack() }
                 )
             }
+            composable("doctor_form") {
+                DoctorFormScreen(
+                    doctorId = null,
+                    onDone = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "doctor_form/{doctorId}",
+                arguments = listOf(navArgument("doctorId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val id = backStackEntry.arguments?.getInt("doctorId")
+                DoctorFormScreen(
+                    doctorId = id,
+                    onDone = { navController.popBackStack() }
+                )
+            }
+            composable("import_stub") { StubScreen("Import") }
         }
     }
 }

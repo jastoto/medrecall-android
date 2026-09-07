@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,6 +58,7 @@ private fun colorForMedication(medicationId: Int): Color =
 fun MedicationsScreen(
     onAddMedication: () -> Unit,
     onEditMedication: (Int) -> Unit,
+    onGoHome: () -> Unit,
     viewModel: MedicationsViewModel = viewModel(factory = MedicationsViewModel.factory(LocalContext.current))
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -65,6 +67,11 @@ fun MedicationsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Medications") },
+                navigationIcon = {
+                    IconButton(onClick = onGoHome) {
+                        Icon(Icons.Default.Home, contentDescription = "Home")
+                    }
+                },
                 actions = {
                     IconButton(onClick = onAddMedication) {
                         Icon(Icons.Default.Add, contentDescription = "Add medication")
