@@ -4,11 +4,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.asok.medrecall.navigation.Destination
 import com.asok.medrecall.ui.MedRecallBottomBar
+import com.asok.medrecall.ui.appointments.AppointmentFormScreen
+import com.asok.medrecall.ui.appointments.AppointmentsScreen
 import com.asok.medrecall.ui.screens.HomeScreen
 import com.asok.medrecall.ui.screens.StubScreen
 
@@ -37,7 +41,28 @@ fun MedRecallApp() {
             composable(Destination.Conditions.route) { StubScreen(Destination.Conditions.label) }
             composable(Destination.Reports.route) { StubScreen(Destination.Reports.label) }
             composable(Destination.MedicalId.route) { StubScreen(Destination.MedicalId.label) }
-            composable(Destination.Calendar.route) { StubScreen(Destination.Calendar.label) }
+            composable(Destination.Calendar.route) {
+                AppointmentsScreen(
+                    onAddAppointment = { navController.navigate("appointment_form") },
+                    onEditAppointment = { id -> navController.navigate("appointment_form/$id") }
+                )
+            }
+            composable("appointment_form") {
+                AppointmentFormScreen(
+                    appointmentId = null,
+                    onDone = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "appointment_form/{appointmentId}",
+                arguments = listOf(navArgument("appointmentId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val id = backStackEntry.arguments?.getInt("appointmentId")
+                AppointmentFormScreen(
+                    appointmentId = id,
+                    onDone = { navController.popBackStack() }
+                )
+            }
         }
     }
 }
