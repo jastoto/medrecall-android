@@ -25,12 +25,6 @@ interface ConditionDao {
     @Query("SELECT * FROM conditions WHERE id = :id")
     suspend fun getById(id: Int): Condition?
 
-    @Query("""
-        SELECT * FROM conditions WHERE
-            name LIKE '%' || :query || '%' OR
-            status LIKE '%' || :query || '%' OR
-            notes LIKE '%' || :query || '%'
-        ORDER BY name ASC
-    """)
-    suspend fun search(query: String): List<Condition>
+    @Query("SELECT * FROM conditions ORDER BY name ASC")
+    suspend fun getAllOnce(): List<Condition>
 }

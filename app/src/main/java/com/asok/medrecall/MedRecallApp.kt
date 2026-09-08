@@ -6,8 +6,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -39,6 +43,7 @@ import com.asok.medrecall.ui.reports.ReportDetailScreen
 import com.asok.medrecall.ui.reports.ReportsScreen
 import com.asok.medrecall.ui.reports.ReportType
 import com.asok.medrecall.ui.screens.HomeScreen
+import com.asok.medrecall.ui.screens.SplashScreen
 import com.asok.medrecall.ui.screens.StubScreen
 import com.asok.medrecall.ui.settings.AccountScreen
 import com.asok.medrecall.ui.settings.BackupRestoreScreen
@@ -48,6 +53,7 @@ import com.asok.medrecall.ui.vitals.VitalDetailScreen
 import com.asok.medrecall.ui.vitals.VitalEntryFormScreen
 import com.asok.medrecall.ui.vitals.VitalType
 import com.asok.medrecall.ui.vitals.VitalsScreen
+import kotlinx.coroutines.delay
 
 /**
  * Top-level composable: gates the whole app behind [LockScreen] whenever
@@ -58,6 +64,17 @@ import com.asok.medrecall.ui.vitals.VitalsScreen
  */
 @Composable
 fun MedRecallApp() {
+    var showSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(2500)
+        showSplash = false
+    }
+
+    if (showSplash) {
+        SplashScreen()
+        return
+    }
+
     val appLockViewModel: AppLockViewModel = viewModel(factory = AppLockViewModel.factory(LocalContext.current))
     val lockState by appLockViewModel.uiState.collectAsState()
 
