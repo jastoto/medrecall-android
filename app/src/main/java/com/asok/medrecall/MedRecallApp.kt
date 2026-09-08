@@ -32,6 +32,9 @@ import com.asok.medrecall.ui.conditions.ConditionFormScreen
 import com.asok.medrecall.ui.conditions.ConditionsScreen
 import com.asok.medrecall.ui.doctors.DoctorFormScreen
 import com.asok.medrecall.ui.doctors.DoctorsScreen
+import com.asok.medrecall.ui.help.HelpDetailScreen
+import com.asok.medrecall.ui.help.HelpScreen
+import com.asok.medrecall.ui.help.helpTopicFromId
 import com.asok.medrecall.ui.lock.AppLockViewModel
 import com.asok.medrecall.ui.lock.LockScreen
 import com.asok.medrecall.ui.medications.MedicationFormScreen
@@ -66,7 +69,7 @@ import kotlinx.coroutines.delay
 fun MedRecallApp() {
     var showSplash by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
-        delay(2500)
+        delay(3500)
         showSplash = false
     }
 
@@ -118,7 +121,21 @@ private fun MedRecallNavHost() {
                 )
             }
             composable(Destination.HelpHowTo.route) {
-                StubScreen(Destination.HelpHowTo.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+                HelpScreen(
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) },
+                    onSelectTopic = { topic -> navController.navigate("help_detail/${topic.id}") }
+                )
+            }
+            composable(
+                route = "help_detail/{topicId}",
+                arguments = listOf(navArgument("topicId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val topic = helpTopicFromId(backStackEntry.arguments?.getString("topicId") ?: "")
+                HelpDetailScreen(
+                    topic = topic,
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) },
+                    onBackToList = { navController.popBackStack() }
+                )
             }
             composable(Destination.RecurringReminders.route) {
                 StubScreen(Destination.RecurringReminders.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
