@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      API 31+ (Android 12+) shows a mandatory system splash screen on cold
+      start, and with no theme customization it defaults to the app's own
+      launcher icon (red cross) on a plain white card, a jarring flash
+      before MedRecall's own coral splash screen (SplashScreen.kt) appears.
+      This override matches the system splash's background color to the
+      custom splash's coral background and blanks out its icon, so the
+      two blend into one continuous coral screen instead of two visibly
+      different ones. Only applies on API 31+; API 26-30 have no forced
+      system splash so the base Theme.MedRecall in values/themes.xml
+      already goes straight to the app's own splash there.
+    -->
+    <style name="Theme.MedRecall" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_blank</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+</resources>

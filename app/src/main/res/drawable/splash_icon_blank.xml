@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Intentionally empty vector: the system splash screen (Android 12+ /
+  API 31+) requires an android:windowSplashScreenAnimatedIcon to be set,
+  but MedRecall does not want the app's launcher icon (red cross) to
+  flash on a separate white/system background before the app's own
+  Compose splash (SplashScreen.kt, coral background + mic icon) appears.
+  Pointing the system icon at this blank 1dp vector means nothing visibly
+  draws on top of the matching windowSplashScreenBackground color below,
+  so the system splash reads as a plain solid coral screen that blends
+  straight into the custom splash instead of showing a jarring icon flash.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="1dp"
+    android:height="1dp"
+    android:viewportWidth="1"
+    android:viewportHeight="1" />
