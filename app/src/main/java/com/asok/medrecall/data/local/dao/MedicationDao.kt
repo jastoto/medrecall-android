@@ -30,4 +30,14 @@ interface MedicationDao {
 
     @Query("SELECT * FROM medications WHERE id = :id")
     suspend fun getById(id: Int): Medication?
+
+    @Query("""
+        SELECT * FROM medications WHERE
+            name LIKE '%' || :query || '%' OR
+            dosage LIKE '%' || :query || '%' OR
+            schedule LIKE '%' || :query || '%' OR
+            notes LIKE '%' || :query || '%'
+        ORDER BY name ASC
+    """)
+    suspend fun search(query: String): List<Medication>
 }

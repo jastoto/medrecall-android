@@ -24,4 +24,7 @@ interface VitalReadingDao {
 
     @Query("SELECT * FROM vital_readings WHERE id = :id")
     suspend fun getById(id: Int): VitalReading?
+
+    @Query("SELECT * FROM vital_readings ORDER BY recordedAt DESC")
+    suspend fun getAllOnce(): List<VitalReading>
 }

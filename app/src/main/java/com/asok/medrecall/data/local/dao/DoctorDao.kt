@@ -24,4 +24,15 @@ interface DoctorDao {
 
     @Query("SELECT * FROM doctors WHERE id = :id")
     suspend fun getById(id: Int): Doctor?
+
+    @Query("""
+        SELECT * FROM doctors WHERE
+            name LIKE '%' || :query || '%' OR
+            specialty LIKE '%' || :query || '%' OR
+            phone LIKE '%' || :query || '%' OR
+            address LIKE '%' || :query || '%' OR
+            notes LIKE '%' || :query || '%'
+        ORDER BY name ASC
+    """)
+    suspend fun search(query: String): List<Doctor>
 }

@@ -13,4 +13,7 @@ interface PatientDao {
 
     @Query("SELECT * FROM patients WHERE id = 1")
     fun observe(): Flow<Patient?>
+
+    @Query("SELECT * FROM patients WHERE id = 1")
+    suspend fun getOnce(): Patient?
 }

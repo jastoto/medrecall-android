@@ -27,4 +27,13 @@ interface AppointmentDao {
 
     @Query("SELECT * FROM appointments WHERE id = :id")
     suspend fun getById(id: Int): Appointment?
+
+    @Query("""
+        SELECT * FROM appointments WHERE
+            reason LIKE '%' || :query || '%' OR
+            location LIKE '%' || :query || '%' OR
+            notes LIKE '%' || :query || '%'
+        ORDER BY dateTime DESC
+    """)
+    suspend fun search(query: String): List<Appointment>
 }

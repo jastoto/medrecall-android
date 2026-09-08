@@ -27,4 +27,12 @@ interface NoteDao {
 
     @Query("SELECT * FROM notes WHERE id = :id")
     suspend fun getById(id: Int): Note?
+
+    @Query("""
+        SELECT * FROM notes WHERE
+            title LIKE '%' || :query || '%' OR
+            body LIKE '%' || :query || '%'
+        ORDER BY createdAt DESC
+    """)
+    suspend fun search(query: String): List<Note>
 }

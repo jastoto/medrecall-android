@@ -23,6 +23,7 @@ import com.asok.medrecall.navigation.Destination
 import com.asok.medrecall.ui.MedRecallBottomBar
 import com.asok.medrecall.ui.appointments.AppointmentFormScreen
 import com.asok.medrecall.ui.appointments.AppointmentsScreen
+import com.asok.medrecall.ui.ask.AskMedRecallScreen
 import com.asok.medrecall.ui.conditions.ConditionFormScreen
 import com.asok.medrecall.ui.conditions.ConditionsScreen
 import com.asok.medrecall.ui.doctors.DoctorFormScreen
@@ -94,7 +95,10 @@ private fun MedRecallNavHost() {
                 HomeScreen(onDestinationClick = { navController.navigate(it.route) })
             }
             composable(Destination.AskMedRecall.route) {
-                StubScreen(Destination.AskMedRecall.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+                AskMedRecallScreen(
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) },
+                    onNavigateToRoute = { route -> navController.navigate(route) }
+                )
             }
             composable(Destination.HelpHowTo.route) {
                 StubScreen(Destination.HelpHowTo.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
