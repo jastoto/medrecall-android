@@ -14,6 +14,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CenterAlignedTopAppBar
+import com.asok.medrecall.ui.components.BackIconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -64,7 +65,12 @@ fun DoctorFormScreen(
     if (!loadedExisting) return
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text(if (doctorId == null) "New Doctor" else "Edit Doctor", fontWeight = FontWeight.Bold, color = Color.Black) }) }
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text(if (doctorId == null) "New Doctor" else "Edit Doctor", fontWeight = FontWeight.Bold, color = Color.Black) },
+                navigationIcon = { BackIconButton(onClick = onDone) }
+            )
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier

@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Card
+import com.asok.medrecall.ui.components.BackIconButton
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -57,9 +58,9 @@ import androidx.compose.ui.text.font.FontWeight
 private val statusOptions = listOf("Active", "Monitoring", "Resolved")
 
 /**
- * Cancel / centered-title / Save top bar (rather than this app's usual
- * Home-icon TopAppBar) matches how this screen is meant to feel like a
- * modal sheet for adding one condition, per the reference design.
+ * Back (orange arrow, same as every other form screen) / centered-title /
+ * Save top bar. Previously used a plain "Cancel" text button here; punch
+ * item #2 standardized it to the same BackIconButton used elsewhere.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,7 +113,7 @@ fun ConditionFormScreen(
             CenterAlignedTopAppBar(
                 title = { Text(if (conditionId == null) "Add Condition" else "Edit Condition", fontWeight = FontWeight.Bold, color = Color.Black) },
                 navigationIcon = {
-                    TextButton(onClick = onDone) { Text("Cancel") }
+                    BackIconButton(onClick = onDone)
                 },
                 actions = {
                     TextButton(

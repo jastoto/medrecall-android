@@ -38,18 +38,19 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.asok.medrecall.data.local.Medication
 import com.asok.medrecall.ui.components.MedRecallTopBar
+import com.asok.medrecall.ui.components.RaisedIconSurface
 
-private val tileColors = listOf(
-    Color(0xFFE0435A), // red
-    Color(0xFF6C63E8), // indigo/purple
-    Color(0xFFFF9F43), // orange
-    Color(0xFF2BB3A3), // teal
-    Color(0xFF4CAF50), // green
-    Color(0xFFAB47BC)  // purple
+private val medicationTileGradients = listOf(
+    listOf(Color(0xFFE0435A), Color(0xFFB8293F)), // red
+    listOf(Color(0xFF6C63E8), Color(0xFF4A41C9)), // indigo/purple
+    listOf(Color(0xFFFF9F43), Color(0xFFE87F2E)), // orange
+    listOf(Color(0xFF2BB3A3), Color(0xFF1D8478)), // teal
+    listOf(Color(0xFF4CAF50), Color(0xFF388E3C)), // green
+    listOf(Color(0xFFAB47BC), Color(0xFF8E24AA))  // purple
 )
 
-private fun colorForMedication(medicationId: Int): Color =
-    tileColors[Math.floorMod(medicationId, tileColors.size)]
+private fun gradientForMedication(medicationId: Int): List<Color> =
+    medicationTileGradients[Math.floorMod(medicationId, medicationTileGradients.size)]
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -146,14 +147,16 @@ private fun MedicationRow(medication: Medication, conditionName: String?, onClic
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .background(colorForMedication(medication.id), RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.Medication, contentDescription = null, tint = Color.White)
-        }
+        RaisedIconSurface(
+            icon = Icons.Default.Medication,
+            contentDescription = null,
+            gradientColors = gradientForMedication(medication.id),
+            onClick = onClick,
+            tileSize = 44.dp,
+            iconSize = 20.dp,
+            cornerRadius = 14.dp,
+            elevation = 6.dp
+        )
         Column(
             modifier = Modifier
                 .padding(start = 12.dp)
