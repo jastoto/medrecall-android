@@ -65,6 +65,9 @@ class BackupViewModel(private val settingsRepository: SettingsRepository) : View
     val googleAccount = settingsRepository.googleAccount
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val microsoftAccount = settingsRepository.microsoftAccount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     private val _mode = MutableStateFlow(BackupMode.FULL)
     val mode: StateFlow<BackupMode> = _mode
 
