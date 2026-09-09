@@ -58,6 +58,7 @@ import com.asok.medrecall.ui.components.MedRecallTopBar
 fun ReportDetailScreen(
     reportType: ReportType,
     onGoHome: () -> Unit,
+    onGoBack: () -> Unit,
     viewModel: ReportDetailViewModel = viewModel(
         factory = ReportDetailViewModel.factory(LocalContext.current, reportType)
     )
@@ -70,7 +71,8 @@ fun ReportDetailScreen(
         topBar = {
             MedRecallTopBar(
                 title = reportType.title,
-                onGoHome = onGoHome
+                onGoHome = onGoHome,
+                onGoBack = onGoBack
             )
         }
     ) { innerPadding ->

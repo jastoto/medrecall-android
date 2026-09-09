@@ -251,7 +251,8 @@ private fun MedRecallNavHost() {
                 val reportTypeId = backStackEntry.arguments?.getString("reportTypeId") ?: ReportType.HISTORY.id
                 ReportDetailScreen(
                     reportType = ReportType.fromId(reportTypeId),
-                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) },
+                    onGoBack = { navController.popBackStack() }
                 )
             }
             composable(Destination.MedicalId.route) {
