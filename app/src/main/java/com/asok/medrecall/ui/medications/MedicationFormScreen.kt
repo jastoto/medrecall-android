@@ -61,9 +61,7 @@ fun MedicationFormScreen(
     var dosage by remember { mutableStateOf("") }
     var schedule by remember { mutableStateOf("") }
     var doctorId by remember { mutableStateOf<Int?>(null) }
-    var doctorNameField by remember { mutableStateOf("") }
     var conditionId by remember { mutableStateOf<Int?>(null) }
-    var conditionNameField by remember { mutableStateOf("") }
     var conditionMenuExpanded by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf("") }
     var active by remember { mutableStateOf(true) }
@@ -91,8 +89,6 @@ fun MedicationFormScreen(
                 conditionId = existing.conditionId
                 notes = existing.notes.orEmpty()
                 active = existing.active
-                doctorNameField = uiState.doctors.firstOrNull { it.id == existing.prescribingDoctorId }?.name.orEmpty()
-                conditionNameField = uiState.conditions.firstOrNull { it.id == existing.conditionId }?.name.orEmpty()
             }
             loadedExisting = true
         }
@@ -138,17 +134,14 @@ fun MedicationFormScreen(
 
             DoctorDropdownField(
                 doctors = uiState.doctors,
-                selectedName = doctorNameField,
-                onNameChange = { name ->
-                    doctorNameField = name
-                    doctorId = uiState.doctors.firstOrNull { it.name.equals(name, ignoreCase = true) }?.id
-                },
+                selectedDoctorId = doctorId,
+                onSelect = { id -> doctorId = id },
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
             )
 
             Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
                 OutlinedTextField(
-                    value = conditionNameField.ifBlank { "None" },
+                    value = uiState.conditions.firstOrNull { it.id == conditionId }?.name ?: "None",
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Condition this treats (optional)") },
@@ -165,7 +158,6 @@ fun MedicationFormScreen(
                         text = { Text("None") },
                         onClick = {
                             conditionId = null
-                            conditionNameField = ""
                             conditionMenuExpanded = false
                         }
                     )
@@ -174,7 +166,6 @@ fun MedicationFormScreen(
                             text = { Text(condition.name) },
                             onClick = {
                                 conditionId = condition.id
-                                conditionNameField = condition.name
                                 conditionMenuExpanded = false
                             }
                         )
@@ -202,17 +193,13 @@ fun MedicationFormScreen(
                 Button(
                     onClick = {
                         coroutineScope.launch {
-                            var resolvedDoctorId = doctorId
-                            if (resolvedDoctorId == null && doctorNameField.isNotBlank()) {
-                                resolvedDoctorId = viewModel.addDoctor(Doctor(name = doctorNameField.trim()))
-                            }
                             viewModel.saveMedication(
                                 Medication(
                                     id = editingId,
                                     name = name.trim(),
                                     dosage = dosage.trim().ifBlank { null },
                                     schedule = schedule.trim().ifBlank { null },
-                                    prescribingDoctorId = resolvedDoctorId,
+                                    prescribingDoctorId = doctorId,
                                     conditionId = conditionId,
                                     active = active,
                                     notes = notes.trim().ifBlank { null }
@@ -247,33 +234,51 @@ fun MedicationFormScreen(
 @Composable
 private fun DoctorDropdownField(
     doctors: List<Doctor>,
-    selectedName: String,
-    onNameChange: (String) -> Unit,
+    selectedDoctorId: Int?,
+    onSelect: (Int?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val filtered = doctors.filter { it.name.contains(selectedName, ignoreCase = true) }
+    // Same readOnly-field/interactionSource fix as the Condition dropdown
+    // above -- a plain .clickable on a readOnly OutlinedTextField gets
+    // swallowed by the field's own pointer input.
+    val interactionSource = remember { MutableInteractionSource() }
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collectLatest { interaction ->
+            if (interaction is PressInteraction.Release) {
+                expanded = true
+            }
+        }
+    }
+    val selectedName = doctors.firstOrNull { it.id == selectedDoctorId }?.name ?: "None"
 
     Box(modifier = modifier) {
         OutlinedTextField(
             value = selectedName,
-            onValueChange = {
-                onNameChange(it)
-                expanded = it.isNotBlank()
-            },
+            onValueChange = {},
+            readOnly = true,
             label = { Text("Prescribing doctor (optional)") },
+            trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null) },
+            interactionSource = interactionSource,
             modifier = Modifier.fillMaxWidth()
         )
         DropdownMenu(
-            expanded = expanded && filtered.isNotEmpty(),
+            expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier.fillMaxWidth()
         ) {
-            filtered.forEach { doctor ->
+            DropdownMenuItem(
+                text = { Text("None") },
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                }
+            )
+            doctors.forEach { doctor ->
                 DropdownMenuItem(
                     text = { Text(doctor.name) },
                     onClick = {
-                        onNameChange(doctor.name)
+                        onSelect(doctor.id)
                         expanded = false
                     }
                 )
