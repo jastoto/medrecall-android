@@ -1,8 +1,11 @@
 package com.asok.medrecall.ui
 
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -31,6 +34,12 @@ fun MedRecallBottomBar(navController: NavHostController) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                // Push the row's content above the system nav bar (gesture
+                // pill or 3-button bar) so it isn't covered by it -- the
+                // Surface's tonal background still extends all the way to
+                // the bottom edge behind the system bar, only the icons
+                // shift up.
+                .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
             bottomNavDestinations.forEach { destination ->
