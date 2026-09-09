@@ -32,4 +32,7 @@ class MedicationRepository(
     suspend fun delete(medication: Medication) = medicationDao.delete(medication)
 
     suspend fun addDoctor(doctor: Doctor): Long = doctorDao.insert(doctor)
+
+    /** Used by MedicationFormScreen's "+ Add new condition" quick-add (punch item #4). */
+    suspend fun addCondition(condition: Condition): Long = conditionDao.insert(condition)
 }

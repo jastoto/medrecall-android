@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -63,6 +64,8 @@ fun MedicationFormScreen(
     var doctorId by remember { mutableStateOf<Int?>(null) }
     var conditionId by remember { mutableStateOf<Int?>(null) }
     var conditionMenuExpanded by remember { mutableStateOf(false) }
+    var showAddConditionDialog by remember { mutableStateOf(false) }
+    var newConditionName by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var active by remember { mutableStateOf(true) }
 
@@ -170,7 +173,46 @@ fun MedicationFormScreen(
                             }
                         )
                     }
+                    DropdownMenuItem(
+                        text = { Text("+ Add new condition") },
+                        onClick = {
+                            conditionMenuExpanded = false
+                            newConditionName = ""
+                            showAddConditionDialog = true
+                        }
+                    )
                 }
+            }
+
+            if (showAddConditionDialog) {
+                AlertDialog(
+                    onDismissRequest = { showAddConditionDialog = false },
+                    title = { Text("New Condition") },
+                    text = {
+                        OutlinedTextField(
+                            value = newConditionName,
+                            onValueChange = { newConditionName = it },
+                            label = { Text("Condition name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            enabled = newConditionName.isNotBlank(),
+                            onClick = {
+                                val trimmedName = newConditionName.trim()
+                                coroutineScope.launch {
+                                    conditionId = viewModel.addCondition(Condition(name = trimmedName))
+                                    showAddConditionDialog = false
+                                }
+                            }
+                        ) { Text("Add") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showAddConditionDialog = false }) { Text("Cancel") }
+                    }
+                )
             }
 
             OutlinedTextField(

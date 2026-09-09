@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import com.asok.medrecall.ui.components.BackIconButton
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -51,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.asok.medrecall.data.local.Condition
+import com.asok.medrecall.data.local.Doctor
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
@@ -58,9 +61,11 @@ import androidx.compose.ui.text.font.FontWeight
 private val statusOptions = listOf("Active", "Monitoring", "Resolved")
 
 /**
- * Back (orange arrow, same as every other form screen) / centered-title /
- * Save top bar. Previously used a plain "Cancel" text button here; punch
- * item #2 standardized it to the same BackIconButton used elsewhere.
+ * Back (orange arrow, same as every other form screen) / centered-title top
+ * bar. Previously had a plain "Cancel" text button (punch item #2 swapped
+ * it for the same BackIconButton used elsewhere) and a "Save" text button
+ * up in the actions slot (punch item #6 moved Save down to a full-width
+ * button at the bottom of the form, matching Doctor/Medication forms).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +83,7 @@ fun ConditionFormScreen(
     var status by remember { mutableStateOf(statusOptions.first()) }
     var iconKey by remember { mutableStateOf(defaultConditionIconKey) }
     var notes by remember { mutableStateOf("") }
+    var doctorId by remember { mutableStateOf<Int?>(null) }
     var statusMenuExpanded by remember { mutableStateOf(false) }
 
     // Same fix as the doctor-picker dropdown on RecordVisitScreen: a plain
@@ -101,6 +107,7 @@ fun ConditionFormScreen(
                 status = existing.status
                 iconKey = existing.iconKey
                 notes = existing.notes.orEmpty()
+                doctorId = existing.doctorId
             }
             loadedExisting = true
         }
@@ -114,25 +121,6 @@ fun ConditionFormScreen(
                 title = { Text(if (conditionId == null) "Add Condition" else "Edit Condition", fontWeight = FontWeight.Bold, color = Color.Black) },
                 navigationIcon = {
                     BackIconButton(onClick = onDone)
-                },
-                actions = {
-                    TextButton(
-                        enabled = name.isNotBlank(),
-                        onClick = {
-                            coroutineScope.launch {
-                                viewModel.saveCondition(
-                                    Condition(
-                                        id = editingId,
-                                        name = name.trim(),
-                                        status = status,
-                                        iconKey = iconKey,
-                                        notes = notes.trim().ifBlank { null }
-                                    )
-                                )
-                                onDone()
-                            }
-                        }
-                    ) { Text("Save") }
                 }
             )
         }
@@ -178,6 +166,13 @@ fun ConditionFormScreen(
                     }
                 }
             }
+
+            DoctorDropdownField(
+                doctors = uiState.doctors,
+                selectedDoctorId = doctorId,
+                onSelect = { id -> doctorId = id },
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+            )
 
             Text(
                 "Icon",
@@ -246,17 +241,40 @@ fun ConditionFormScreen(
                 }
             }
 
-            if (conditionId != null) {
-                TextButton(
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
+                Button(
                     onClick = {
                         coroutineScope.launch {
-                            viewModel.getCondition(editingId)?.let { viewModel.deleteCondition(it) }
+                            viewModel.saveCondition(
+                                Condition(
+                                    id = editingId,
+                                    name = name.trim(),
+                                    status = status,
+                                    iconKey = iconKey,
+                                    notes = notes.trim().ifBlank { null },
+                                    doctorId = doctorId
+                                )
+                            )
                             onDone()
                         }
                     },
-                    modifier = Modifier.padding(top = 20.dp)
+                    modifier = Modifier.weight(1f),
+                    enabled = name.isNotBlank()
                 ) {
-                    Text("Delete Condition")
+                    Text("Save")
+                }
+                if (conditionId != null) {
+                    TextButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                viewModel.getCondition(editingId)?.let { viewModel.deleteCondition(it) }
+                                onDone()
+                            }
+                        },
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Text("Delete")
+                    }
                 }
             }
         }
@@ -277,5 +295,61 @@ private fun IconChoiceTile(option: ConditionIconOption, selected: Boolean, onCli
         contentAlignment = Alignment.Center
     ) {
         Icon(option.icon, contentDescription = option.key, tint = tint, modifier = Modifier.size(22.dp))
+    }
+}
+
+@Composable
+private fun DoctorDropdownField(
+    doctors: List<Doctor>,
+    selectedDoctorId: Int?,
+    onSelect: (Int?) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    // Same readOnly-field/interactionSource fix as the status dropdown above
+    // -- a plain .clickable on a readOnly OutlinedTextField gets swallowed by
+    // the field's own pointer input.
+    val interactionSource = remember { MutableInteractionSource() }
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collectLatest { interaction ->
+            if (interaction is PressInteraction.Release) {
+                expanded = true
+            }
+        }
+    }
+    val selectedName = doctors.firstOrNull { it.id == selectedDoctorId }?.name ?: "None"
+
+    Box(modifier = modifier) {
+        OutlinedTextField(
+            value = selectedName,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Prescribing doctor (optional)") },
+            trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null) },
+            interactionSource = interactionSource,
+            modifier = Modifier.fillMaxWidth()
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            DropdownMenuItem(
+                text = { Text("None") },
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                }
+            )
+            doctors.forEach { doctor ->
+                DropdownMenuItem(
+                    text = { Text(doctor.name) },
+                    onClick = {
+                        onSelect(doctor.id)
+                        expanded = false
+                    }
+                )
+            }
+        }
     }
 }

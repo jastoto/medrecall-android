@@ -113,7 +113,8 @@ object BackupImporter {
                                 status = o.optString("status", "Active"),
                                 iconKey = o.optString("iconKey", "assignment"),
                                 notes = o.optStringOrNull("notes"),
-                                includedInMedicalId = o.optBoolean("includedInMedicalId", true)
+                                includedInMedicalId = o.optBoolean("includedInMedicalId", true),
+                                doctorId = o.optIntOrNull("doctorId")
                             )
                         )
                     }

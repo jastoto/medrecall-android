@@ -14,7 +14,7 @@ import com.asok.medrecall.data.local.dao.VitalReadingDao
 
 @Database(
     entities = [Patient::class, Doctor::class, Appointment::class, Medication::class, Note::class, Condition::class, VitalReading::class],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class MedRecallDatabase : RoomDatabase() {
@@ -40,6 +40,7 @@ abstract class MedRecallDatabase : RoomDatabase() {
                     // No migrations written yet — fine while we're still shaping the schema
                     // during early development. Revisit before this ships for real, since this
                     // wipes the local db on every version bump instead of preserving data.
+                    // v8 -> v9: added Condition.doctorId (punch item #5).
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                     .also { INSTANCE = it }

@@ -13,6 +13,9 @@ import androidx.room.PrimaryKey
  * Conditions section of the Medical ID card -- defaults to true so existing
  * conditions keep showing up there until the user opts one out from the
  * Medical ID edit screen.
+ *
+ * doctorId: the doctor who manages/prescribes for this condition (punch
+ * item #5) -- nullable since not every condition has one assigned yet.
  */
 @Entity(tableName = "conditions")
 data class Condition(
@@ -21,5 +24,6 @@ data class Condition(
     val status: String = "Active",
     val iconKey: String = "assignment",
     val notes: String? = null,
-    val includedInMedicalId: Boolean = true
+    val includedInMedicalId: Boolean = true,
+    val doctorId: Int? = null
 )

@@ -50,6 +50,8 @@ class MedicationsViewModel(private val repository: MedicationRepository) : ViewM
 
     suspend fun addDoctor(doctor: Doctor): Int = repository.addDoctor(doctor).toInt()
 
+    suspend fun addCondition(condition: Condition): Int = repository.addCondition(condition).toInt()
+
     companion object {
         fun factory(context: Context): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")

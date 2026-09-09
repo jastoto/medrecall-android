@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.asok.medrecall.data.local.Appointment
+import com.asok.medrecall.data.local.Condition
 import com.asok.medrecall.data.local.Doctor
 import com.asok.medrecall.data.local.MedRecallDatabase
 import com.asok.medrecall.data.repository.DoctorRepository
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.stateIn
 data class DoctorsUiState(
     val doctors: List<Doctor> = emptyList(),
     val upcomingAppointments: List<Appointment> = emptyList(),
+    val conditions: List<Condition> = emptyList(),
     val isLoading: Boolean = true
 )
 
@@ -30,11 +32,13 @@ class DoctorsViewModel(private val repository: DoctorRepository) : ViewModel() {
     val uiState: StateFlow<DoctorsUiState> =
         combine(
             repository.observeDoctors(),
-            repository.observeUpcomingAppointments(System.currentTimeMillis())
-        ) { doctors, appointments ->
+            repository.observeUpcomingAppointments(System.currentTimeMillis()),
+            repository.observeConditions()
+        ) { doctors, appointments, conditions ->
             DoctorsUiState(
                 doctors = doctors.sortedBy { it.name },
                 upcomingAppointments = appointments.take(3),
+                conditions = conditions,
                 isLoading = false
             )
         }.stateIn(
@@ -54,7 +58,7 @@ class DoctorsViewModel(private val repository: DoctorRepository) : ViewModel() {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val db = MedRecallDatabase.getInstance(context)
-                val repo = DoctorRepository(db.doctorDao(), db.appointmentDao())
+                val repo = DoctorRepository(db.doctorDao(), db.appointmentDao(), db.conditionDao())
                 return DoctorsViewModel(repo) as T
             }
         }

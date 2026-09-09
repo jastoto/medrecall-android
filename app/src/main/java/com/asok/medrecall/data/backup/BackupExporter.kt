@@ -90,6 +90,7 @@ object BackupExporter {
                         put("iconKey", c.iconKey)
                         putIfNotNull("notes", c.notes)
                         put("includedInMedicalId", c.includedInMedicalId)
+                        putIfNotNull("doctorId", c.doctorId)
                     })
                 }
                 root.put("items", items)

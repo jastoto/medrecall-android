@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.asok.medrecall.data.local.Appointment
+import com.asok.medrecall.data.local.Condition
 import com.asok.medrecall.data.local.Doctor
 import java.time.Instant
 import java.time.ZoneId
@@ -137,6 +138,7 @@ fun DoctorsScreen(
                         rowDoctors.forEach { doctor ->
                             DoctorTile(
                                 doctor = doctor,
+                                managedConditions = uiState.conditions.filter { it.doctorId == doctor.id },
                                 onClick = { onEditDoctor(doctor.id) },
                                 modifier = Modifier.weight(1f)
                             )
@@ -165,7 +167,12 @@ private fun UpcomingAppointmentRow(appointment: Appointment, doctorName: String?
 }
 
 @Composable
-private fun DoctorTile(doctor: Doctor, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun DoctorTile(
+    doctor: Doctor,
+    managedConditions: List<Condition>,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier.clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -198,6 +205,16 @@ private fun DoctorTile(doctor: Doctor, onClick: () -> Unit, modifier: Modifier =
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (managedConditions.isNotEmpty()) {
+            Text(
+                managedConditions.joinToString(", ") { it.name },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp)
             )
         }
     }
