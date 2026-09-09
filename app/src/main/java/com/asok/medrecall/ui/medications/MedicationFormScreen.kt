@@ -1,5 +1,7 @@
 package com.asok.medrecall.ui.medications
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,11 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -31,8 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.asok.medrecall.data.local.Condition
 import com.asok.medrecall.data.local.Doctor
 import com.asok.medrecall.data.local.Medication
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -54,8 +61,23 @@ fun MedicationFormScreen(
     var schedule by remember { mutableStateOf("") }
     var doctorId by remember { mutableStateOf<Int?>(null) }
     var doctorNameField by remember { mutableStateOf("") }
+    var conditionId by remember { mutableStateOf<Int?>(null) }
+    var conditionNameField by remember { mutableStateOf("") }
+    var conditionMenuExpanded by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf("") }
     var active by remember { mutableStateOf(true) }
+
+    // Same readOnly-field/interactionSource fix as ConditionFormScreen's status
+    // dropdown -- a plain .clickable on a readOnly OutlinedTextField gets
+    // swallowed by the field's own pointer input.
+    val conditionFieldInteractionSource = remember { MutableInteractionSource() }
+    LaunchedEffect(conditionFieldInteractionSource) {
+        conditionFieldInteractionSource.interactions.collectLatest { interaction ->
+            if (interaction is PressInteraction.Release) {
+                conditionMenuExpanded = true
+            }
+        }
+    }
 
     LaunchedEffect(medicationId) {
         if (medicationId != null) {
@@ -65,9 +87,11 @@ fun MedicationFormScreen(
                 dosage = existing.dosage.orEmpty()
                 schedule = existing.schedule.orEmpty()
                 doctorId = existing.prescribingDoctorId
+                conditionId = existing.conditionId
                 notes = existing.notes.orEmpty()
                 active = existing.active
                 doctorNameField = uiState.doctors.firstOrNull { it.id == existing.prescribingDoctorId }?.name.orEmpty()
+                conditionNameField = uiState.conditions.firstOrNull { it.id == existing.conditionId }?.name.orEmpty()
             }
             loadedExisting = true
         }
@@ -116,6 +140,42 @@ fun MedicationFormScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
             )
 
+            Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                OutlinedTextField(
+                    value = conditionNameField.ifBlank { "None" },
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Condition this treats (optional)") },
+                    trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null) },
+                    interactionSource = conditionFieldInteractionSource,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                DropdownMenu(
+                    expanded = conditionMenuExpanded,
+                    onDismissRequest = { conditionMenuExpanded = false },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("None") },
+                        onClick = {
+                            conditionId = null
+                            conditionNameField = ""
+                            conditionMenuExpanded = false
+                        }
+                    )
+                    uiState.conditions.forEach { condition ->
+                        DropdownMenuItem(
+                            text = { Text(condition.name) },
+                            onClick = {
+                                conditionId = condition.id
+                                conditionNameField = condition.name
+                                conditionMenuExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
@@ -147,6 +207,7 @@ fun MedicationFormScreen(
                                     dosage = dosage.trim().ifBlank { null },
                                     schedule = schedule.trim().ifBlank { null },
                                     prescribingDoctorId = resolvedDoctorId,
+                                    conditionId = conditionId,
                                     active = active,
                                     notes = notes.trim().ifBlank { null }
                                 )

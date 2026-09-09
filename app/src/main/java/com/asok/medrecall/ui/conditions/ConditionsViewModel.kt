@@ -5,15 +5,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.asok.medrecall.data.local.Condition
+import com.asok.medrecall.data.local.Doctor
+import com.asok.medrecall.data.local.Medication
 import com.asok.medrecall.data.local.MedRecallDatabase
 import com.asok.medrecall.data.repository.ConditionRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 data class ConditionsUiState(
     val conditions: List<Condition> = emptyList(),
+    val medications: List<Medication> = emptyList(),
+    val doctors: List<Doctor> = emptyList(),
     val isLoading: Boolean = true
 )
 
@@ -25,9 +29,13 @@ data class ConditionsUiState(
 class ConditionsViewModel(private val repository: ConditionRepository) : ViewModel() {
 
     val uiState: StateFlow<ConditionsUiState> =
-        repository.observeConditions()
-            .map { conditions -> ConditionsUiState(conditions = conditions, isLoading = false) }
-            .stateIn(
+        combine(
+            repository.observeConditions(),
+            repository.observeMedications(),
+            repository.observeDoctors()
+        ) { conditions, medications, doctors ->
+            ConditionsUiState(conditions = conditions, medications = medications, doctors = doctors, isLoading = false)
+        }.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
                 initialValue = ConditionsUiState()
@@ -44,7 +52,7 @@ class ConditionsViewModel(private val repository: ConditionRepository) : ViewMod
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val db = MedRecallDatabase.getInstance(context)
-                val repo = ConditionRepository(db.conditionDao())
+                val repo = ConditionRepository(db.conditionDao(), db.medicationDao(), db.doctorDao())
                 return ConditionsViewModel(repo) as T
             }
         }

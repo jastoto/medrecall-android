@@ -64,6 +64,7 @@ object BackupImporter {
                                 dosage = o.optStringOrNull("dosage"),
                                 schedule = o.optStringOrNull("schedule"),
                                 prescribingDoctorId = o.optIntOrNull("prescribingDoctorId"),
+                                conditionId = o.optIntOrNull("conditionId"),
                                 startDate = o.optLongOrNull("startDate"),
                                 endDate = o.optLongOrNull("endDate"),
                                 active = o.optBoolean("active", true),

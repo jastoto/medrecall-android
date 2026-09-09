@@ -14,7 +14,7 @@ import com.asok.medrecall.data.local.dao.VitalReadingDao
 
 @Database(
     entities = [Patient::class, Doctor::class, Appointment::class, Medication::class, Note::class, Condition::class, VitalReading::class],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class MedRecallDatabase : RoomDatabase() {

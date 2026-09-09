@@ -48,6 +48,7 @@ object BackupExporter {
                         putIfNotNull("dosage", m.dosage)
                         putIfNotNull("schedule", m.schedule)
                         putIfNotNull("prescribingDoctorId", m.prescribingDoctorId)
+                        putIfNotNull("conditionId", m.conditionId)
                         putIfNotNull("startDate", m.startDate)
                         putIfNotNull("endDate", m.endDate)
                         put("active", m.active)

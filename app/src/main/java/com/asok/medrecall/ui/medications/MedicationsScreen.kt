@@ -83,6 +83,7 @@ fun MedicationsScreen(
             }
         } else {
             val doctorsById = uiState.doctors.associateBy { it.id }
+            val conditionsById = uiState.conditions.associateBy { it.id }
             val grouped = uiState.medications
                 .sortedWith(compareByDescending<Medication> { it.active }.thenBy { it.name })
                 .groupBy { med -> med.prescribingDoctorId?.let { doctorsById[it] } }
@@ -98,6 +99,7 @@ fun MedicationsScreen(
                     DoctorMedicationGroup(
                         doctorName = doctor?.name ?: "No Doctor Assigned",
                         medications = meds,
+                        conditionsById = conditionsById,
                         onEditMedication = onEditMedication
                     )
                 }
@@ -110,6 +112,7 @@ fun MedicationsScreen(
 private fun DoctorMedicationGroup(
     doctorName: String,
     medications: List<Medication>,
+    conditionsById: Map<Int, com.asok.medrecall.data.local.Condition>,
     onEditMedication: (Int) -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -123,6 +126,7 @@ private fun DoctorMedicationGroup(
             medications.forEachIndexed { index, medication ->
                 MedicationRow(
                     medication = medication,
+                    conditionName = medication.conditionId?.let { conditionsById[it]?.name },
                     onClick = { onEditMedication(medication.id) }
                 )
                 if (index < medications.lastIndex) {
@@ -134,7 +138,7 @@ private fun DoctorMedicationGroup(
 }
 
 @Composable
-private fun MedicationRow(medication: Medication, onClick: () -> Unit) {
+private fun MedicationRow(medication: Medication, conditionName: String?, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -160,7 +164,7 @@ private fun MedicationRow(medication: Medication, onClick: () -> Unit) {
                 color = Color.Black,
                 textDecoration = if (medication.active) TextDecoration.None else TextDecoration.LineThrough
             )
-            val details = listOfNotNull(medication.dosage, medication.schedule).joinToString(" · ")
+            val details = listOfNotNull(medication.dosage, medication.schedule, conditionName?.let { "for $it" }).joinToString(" · ")
             if (details.isNotBlank()) {
                 Text(details, style = MaterialTheme.typography.bodyMedium)
             }

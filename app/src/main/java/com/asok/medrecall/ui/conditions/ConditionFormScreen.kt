@@ -27,6 +27,7 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -35,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +69,7 @@ fun ConditionFormScreen(
     viewModel: ConditionsViewModel = viewModel(factory = ConditionsViewModel.factory(LocalContext.current))
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val uiState by viewModel.uiState.collectAsState()
 
     var loadedExisting by remember { mutableStateOf(conditionId == null) }
     var editingId by remember { mutableStateOf(0) }
@@ -208,6 +211,39 @@ fun ConditionFormScreen(
                 minLines = 4,
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp)
             )
+
+            if (conditionId != null) {
+                val doctorsById = uiState.doctors.associateBy { it.id }
+                val medsForCondition = uiState.medications.filter { it.conditionId == editingId }
+                Text(
+                    "Medications for this condition",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 20.dp, bottom = 8.dp)
+                )
+                if (medsForCondition.isEmpty()) {
+                    Text(
+                        "No medications linked yet. Set this condition on a medication's edit screen to tie it here.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            medsForCondition.forEachIndexed { index, medication ->
+                                val doctorName = medication.prescribingDoctorId?.let { doctorsById[it]?.name }
+                                Text(
+                                    if (doctorName != null) medication.name + " — " + doctorName else medication.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                                if (index < medsForCondition.lastIndex) {
+                                    HorizontalDivider()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             if (conditionId != null) {
                 TextButton(
