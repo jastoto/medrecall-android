@@ -8,6 +8,7 @@ import com.asok.medrecall.data.local.MedRecallDatabase
 import com.asok.medrecall.data.search.SearchRepository
 import com.asok.medrecall.data.search.SearchResult
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,13 +32,35 @@ class AskMedRecallViewModel(private val repository: SearchRepository) : ViewMode
     val uiState: StateFlow<AskMedRecallUiState> = _uiState.asStateFlow()
 
     private var searchJob: Job? = null
+    private var debounceJob: Job? = null
 
+    /**
+     * Called on every keystroke. Live results are debounced so a fast typist
+     * doesn't fire a fresh search per character, and anything under
+     * [MIN_LIVE_QUERY_LENGTH] chars just waits for more input rather than
+     * searching on 1 letter. An explicit submit (search icon/IME action,
+     * [runSearch]) always runs immediately regardless of length.
+     */
     fun onQueryChange(newQuery: String) {
         _uiState.value = _uiState.value.copy(query = newQuery)
+        debounceJob?.cancel()
+
+        val trimmed = newQuery.trim()
+        if (trimmed.length < MIN_LIVE_QUERY_LENGTH) {
+            searchJob?.cancel()
+            _uiState.value = _uiState.value.copy(results = emptyList(), hasSearched = false, isSearching = false)
+            return
+        }
+
+        debounceJob = viewModelScope.launch {
+            delay(LIVE_SEARCH_DEBOUNCE_MS)
+            runSearch()
+        }
     }
 
-    /** Runs a search for the current query text. Call from the search icon/IME action. */
+    /** Runs a search for the current query text. Call from the search icon/IME action, or after the live-typing debounce settles. */
     fun runSearch() {
+        debounceJob?.cancel()
         val query = _uiState.value.query.trim()
         searchJob?.cancel()
         if (query.isEmpty()) {
@@ -56,11 +79,15 @@ class AskMedRecallViewModel(private val repository: SearchRepository) : ViewMode
     }
 
     fun clearSearch() {
+        debounceJob?.cancel()
         searchJob?.cancel()
         _uiState.value = AskMedRecallUiState()
     }
 
     companion object {
+        private const val MIN_LIVE_QUERY_LENGTH = 2
+        private const val LIVE_SEARCH_DEBOUNCE_MS = 350L
+
         fun factory(context: Context): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
