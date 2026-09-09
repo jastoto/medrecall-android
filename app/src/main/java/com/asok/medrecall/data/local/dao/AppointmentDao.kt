@@ -3,6 +3,7 @@ package com.asok.medrecall.data.local.dao
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.asok.medrecall.data.local.Appointment
@@ -39,4 +40,12 @@ interface AppointmentDao {
     // silently updating events that now live in the wrong (old) calendar.
     @Query("UPDATE appointments SET deviceCalendarEventId = NULL")
     suspend fun clearAllDeviceCalendarEventIds()
+
+    /** Bulk-inserts, replacing on id conflict -- used by BackupImporter after deleteAll() to reload a section from a Drive backup with its original ids intact. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllForRestore(items: List<Appointment>)
+
+    /** Clears this table -- used by BackupImporter for a REPLACE-mode restore before reloading from a Drive backup. */
+    @Query("DELETE FROM appointments")
+    suspend fun deleteAll()
 }

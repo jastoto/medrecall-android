@@ -10,7 +10,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +26,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,6 +52,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.asok.medrecall.data.backup.BackupResult
 import com.asok.medrecall.data.backup.BackupSection
+import com.asok.medrecall.data.backup.DriveBackupFile
+import com.asok.medrecall.data.backup.RestoreResult
+import com.asok.medrecall.data.backup.SectionBackups
 import com.asok.medrecall.ui.components.MedRecallTopBar
 
 private enum class BackupDestination(val icon: ImageVector, val label: String) {
@@ -57,13 +66,16 @@ private enum class BackupDestination(val icon: ImageVector, val label: String) {
 /**
  * Settings > Backup & Restore. Pick a destination, then Back Up or Restore.
  *
- * Google Drive is the one real destination: Back Up Now either exports
- * every section (Full) or just the ones checked (Individual -- mutually
+ * Google Drive is the one real destination. Back Up Now exports every
+ * section (Full) or just the ones checked (Individual -- mutually
  * exclusive with Full, per Asok's spec) as separate JSON files under
  * My Drive > MedRecall > Android Backup (see DriveBackupManager /
- * BackupExporter). OneDrive, "Files on This Phone", and Restore (all
- * destinations) are still UI shells -- tapping them explains what's coming
- * rather than doing anything real yet.
+ * BackupExporter). Restore re-authorizes, lists what's actually sitting in
+ * that Drive folder, and lets Asok pick a backup date per section in
+ * RestorePickerDialog below -- restoring a section REPLACES its current
+ * data in the app (see BackupImporter / DriveRestoreManager), per Asok's
+ * spec. OneDrive and "Files on This Phone" are still UI shells -- tapping
+ * them explains what's coming rather than doing anything real yet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,6 +92,8 @@ fun BackupRestoreScreen(onGoHome: () -> Unit) {
     val selectedSections by viewModel.selectedSections.collectAsState()
     val runState by viewModel.runState.collectAsState()
     val pendingResolution by viewModel.pendingResolution.collectAsState()
+    val restoreState by viewModel.restoreState.collectAsState()
+    val restorePendingResolution by viewModel.restorePendingResolution.collectAsState()
 
     val consentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
@@ -90,6 +104,18 @@ fun BackupRestoreScreen(onGoHome: () -> Unit) {
     LaunchedEffect(pendingResolution) {
         pendingResolution?.let { intentSender ->
             consentLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
+        }
+    }
+
+    val restoreConsentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        activity?.let { viewModel.onRestoreDriveConsentResult(it, result.resultCode, result.data) }
+    }
+
+    LaunchedEffect(restorePendingResolution) {
+        restorePendingResolution?.let { intentSender ->
+            restoreConsentLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
         }
     }
 
@@ -128,7 +154,12 @@ fun BackupRestoreScreen(onGoHome: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    val isBusy = runState is BackupRunState.AuthorizingDrive || runState is BackupRunState.Uploading
+                    val isBackupBusy = runState is BackupRunState.AuthorizingDrive || runState is BackupRunState.Uploading
+                    val isRestoreBusy = restoreState is RestoreRunState.AuthorizingDrive ||
+                        restoreState is RestoreRunState.LoadingBackups ||
+                        restoreState is RestoreRunState.Restoring
+                    val isAnyBusy = isBackupBusy || isRestoreBusy
+
                     Button(
                         onClick = {
                             when (selected) {
@@ -142,10 +173,10 @@ fun BackupRestoreScreen(onGoHome: () -> Unit) {
                                 else -> dialogMessage = "Backing up to ${selected.label} is coming in a future update."
                             }
                         },
-                        enabled = !isBusy,
+                        enabled = !isAnyBusy,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        if (isBusy) {
+                        if (isBackupBusy) {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                             Text(text = "  Backing Up...")
                         } else {
@@ -155,12 +186,27 @@ fun BackupRestoreScreen(onGoHome: () -> Unit) {
                     }
                     OutlinedButton(
                         onClick = {
-                            dialogMessage = "Restoring from ${selected.label} is coming in a future update."
+                            when (selected) {
+                                BackupDestination.GOOGLE_DRIVE -> {
+                                    if (googleAccount?.driveConnected != true) {
+                                        dialogMessage = "Connect your Google account first in Settings > Account, then come back here to restore from Google Drive."
+                                    } else {
+                                        activity?.let { viewModel.startGoogleDriveRestore(it) }
+                                    }
+                                }
+                                else -> dialogMessage = "Restoring from ${selected.label} is coming in a future update."
+                            }
                         },
+                        enabled = !isAnyBusy,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Restore, contentDescription = null)
-                        Text(text = "  Restore")
+                        if (isRestoreBusy) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Text(text = "  Checking Google Drive...")
+                        } else {
+                            Icon(Icons.Default.Restore, contentDescription = null)
+                            Text(text = "  Restore")
+                        }
                     }
                 }
             }
@@ -181,6 +227,26 @@ fun BackupRestoreScreen(onGoHome: () -> Unit) {
             title = { Text("Backup & Restore") },
             text = { Text(currentRunState.message) },
             confirmButton = { TextButton(onClick = { viewModel.dismissResult() }) { Text("OK") } }
+        )
+    }
+
+    val currentRestoreState = restoreState
+    if (currentRestoreState is RestoreRunState.Picking) {
+        RestorePickerDialog(
+            sections = currentRestoreState.sections,
+            onConfirm = { chosen -> activity?.let { viewModel.confirmRestore(it, currentRestoreState.accessToken, chosen) } },
+            onDismiss = { viewModel.cancelRestorePicker() }
+        )
+    }
+    if (currentRestoreState is RestoreRunState.Done) {
+        RestoreResultDialog(results = currentRestoreState.results, onDismiss = { viewModel.dismissRestoreResult() })
+    }
+    if (currentRestoreState is RestoreRunState.Error) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissRestoreResult() },
+            title = { Text("Backup & Restore") },
+            text = { Text(currentRestoreState.message) },
+            confirmButton = { TextButton(onClick = { viewModel.dismissRestoreResult() }) { Text("OK") } }
         )
     }
 }
@@ -254,6 +320,102 @@ private fun BackupResultDialog(results: List<BackupResult>, onDismiss: () -> Uni
                 if (successes.isNotEmpty()) {
                     Text("Backed up to Google Drive (My Drive > MedRecall > Android Backup):")
                     successes.forEach { Text("• ${it.fileName}", style = MaterialTheme.typography.bodySmall) }
+                }
+                if (failures.isNotEmpty()) {
+                    if (successes.isNotEmpty()) Text(" ")
+                    Text("Failed:")
+                    failures.forEach { Text("• ${it.section.label}: ${it.message}", style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } }
+    )
+}
+
+@Composable
+private fun RestorePickerDialog(
+    sections: List<SectionBackups>,
+    onConfirm: (List<DriveBackupFile>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val selections = remember {
+        mutableStateMapOf<BackupSection, DriveBackupFile?>().apply {
+            sections.forEach { put(it.section, it.files.first()) }
+        }
+    }
+    var expandedSection by remember { mutableStateOf<BackupSection?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Restore from Google Drive") },
+        text = {
+            Column {
+                Text(
+                    text = "Choose which sections to restore and which backup date to use. Restoring a section REPLACES its current data in the app.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                sections.forEach { sectionBackups ->
+                    val selectedFile = selections[sectionBackups.section]
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = selectedFile != null,
+                            onCheckedChange = { checked ->
+                                selections[sectionBackups.section] = if (checked) sectionBackups.files.first() else null
+                            }
+                        )
+                        Text(text = sectionBackups.section.label, modifier = Modifier.weight(1f))
+                        Box {
+                            TextButton(
+                                onClick = { expandedSection = sectionBackups.section },
+                                enabled = selectedFile != null
+                            ) {
+                                Text(text = selectedFile?.dateLabel ?: sectionBackups.files.first().dateLabel)
+                            }
+                            DropdownMenu(
+                                expanded = expandedSection == sectionBackups.section,
+                                onDismissRequest = { expandedSection = null }
+                            ) {
+                                sectionBackups.files.forEach { file ->
+                                    DropdownMenuItem(
+                                        text = { Text(file.dateLabel) },
+                                        onClick = {
+                                            selections[sectionBackups.section] = file
+                                            expandedSection = null
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selections.values.filterNotNull()) }) { Text("Restore") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun RestoreResultDialog(results: List<RestoreResult>, onDismiss: () -> Unit) {
+    val successes = results.filterIsInstance<RestoreResult.Success>()
+    val failures = results.filterIsInstance<RestoreResult.Failure>()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Backup & Restore") },
+        text = {
+            Column {
+                if (successes.isNotEmpty()) {
+                    Text("Restored from Google Drive:")
+                    successes.forEach { Text("• ${it.section.label} (${it.fileName})", style = MaterialTheme.typography.bodySmall) }
                 }
                 if (failures.isNotEmpty()) {
                     if (successes.isNotEmpty()) Text(" ")
