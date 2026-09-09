@@ -48,25 +48,37 @@ import java.time.format.DateTimeFormatter
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 
+/**
+ * Create/edit an appointment. [initialDateMillis], when given (tapping a
+ * date on the Calendar screen), pre-fills a brand-new appointment's date --
+ * ignored when editing an existing one, since that loads its own date.
+ * Doctor selection is the type-to-filter dropdown below (pick an existing
+ * doctor, or type a new name to create one on Save). Saving also
+ * best-effort syncs to whichever device calendar is selected in
+ * Settings > Calendar Sync (see AppointmentsViewModel.syncToDeviceCalendar).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppointmentFormScreen(
     appointmentId: Int?,
+    initialDateMillis: Long? = null,
     onDone: () -> Unit,
     viewModel: AppointmentsViewModel = viewModel(factory = AppointmentsViewModel.factory(LocalContext.current))
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     var loadedExisting by remember { mutableStateOf(appointmentId == null) }
     var editingId by remember { mutableStateOf(0) }
     var reason by remember { mutableStateOf("") }
-    var dateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var dateMillis by remember { mutableStateOf(initialDateMillis ?: System.currentTimeMillis()) }
     var doctorId by remember { mutableStateOf<Int?>(null) }
     var doctorNameField by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var completed by remember { mutableStateOf(false) }
+    var deviceCalendarEventId by remember { mutableStateOf<Long?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
 
@@ -80,6 +92,7 @@ fun AppointmentFormScreen(
                 location = existing.location.orEmpty()
                 notes = existing.notes.orEmpty()
                 completed = existing.completed
+                deviceCalendarEventId = existing.deviceCalendarEventId
                 doctorNameField = uiState.doctors.firstOrNull { it.id == existing.doctorId }?.name.orEmpty()
             }
             loadedExisting = true
@@ -158,7 +171,7 @@ fun AppointmentFormScreen(
                             if (resolvedDoctorId == null && doctorNameField.isNotBlank()) {
                                 resolvedDoctorId = viewModel.addDoctor(Doctor(name = doctorNameField.trim()))
                             }
-                            viewModel.saveAppointment(
+                            val saved = viewModel.saveAppointment(
                                 Appointment(
                                     id = editingId,
                                     dateTime = dateMillis,
@@ -166,9 +179,12 @@ fun AppointmentFormScreen(
                                     doctorId = resolvedDoctorId,
                                     location = location.trim().ifBlank { null },
                                     notes = notes.trim().ifBlank { null },
-                                    completed = completed
+                                    completed = completed,
+                                    deviceCalendarEventId = deviceCalendarEventId
                                 )
                             )
+                            val doctorName = uiState.doctors.firstOrNull { it.id == resolvedDoctorId }?.name
+                            viewModel.syncToDeviceCalendar(context, saved, doctorName)
                             onDone()
                         }
                     },
@@ -181,7 +197,7 @@ fun AppointmentFormScreen(
                     TextButton(
                         onClick = {
                             coroutineScope.launch {
-                                viewModel.getAppointment(editingId)?.let { viewModel.deleteAppointment(it) }
+                                viewModel.getAppointment(editingId)?.let { viewModel.deleteAppointment(context, it) }
                                 onDone()
                             }
                         },

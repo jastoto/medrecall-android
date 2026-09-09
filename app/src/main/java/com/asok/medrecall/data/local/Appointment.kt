@@ -11,5 +11,10 @@ data class Appointment(
     val doctorId: Int? = null,
     val location: String? = null,
     val notes: String? = null,
-    val completed: Boolean = false
+    val completed: Boolean = false,
+    // Id of the event this appointment was synced to in the device's chosen
+    // calendar (Settings > Calendar Sync) -- see data/calendar/DeviceCalendarManager.kt.
+    // Null means never synced (or sync is off). Cleared for every appointment
+    // whenever the user switches to a different sync calendar.
+    val deviceCalendarEventId: Long? = null
 )

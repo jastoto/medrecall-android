@@ -4,6 +4,12 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Calendar Sync (Settings > Calendar Sync): read/write whatever
+         Google, Office/Exchange, or local calendar the user picks on this
+         device; see data/calendar/DeviceCalendarManager.kt. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
     <!-- Health Connect (Android's equivalent to Apple Health) read permissions
          for the Vitals feature: see data/health/HealthConnectManager.kt.
          MedRecall only ever reads; there are no matching WRITE_* permissions. -->

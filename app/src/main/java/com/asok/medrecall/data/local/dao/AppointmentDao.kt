@@ -30,4 +30,13 @@ interface AppointmentDao {
 
     @Query("SELECT * FROM appointments ORDER BY dateTime DESC")
     suspend fun getAllOnce(): List<Appointment>
+
+    @Query("UPDATE appointments SET deviceCalendarEventId = :eventId WHERE id = :id")
+    suspend fun updateDeviceCalendarEventId(id: Int, eventId: Long?)
+
+    // Run when the user switches Settings > Calendar Sync to a different
+    // calendar -- existing appointments stay pointed at nothing rather than
+    // silently updating events that now live in the wrong (old) calendar.
+    @Query("UPDATE appointments SET deviceCalendarEventId = NULL")
+    suspend fun clearAllDeviceCalendarEventIds()
 }

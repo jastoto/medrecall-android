@@ -262,14 +262,19 @@ private fun MedRecallNavHost() {
             }
             composable(Destination.Calendar.route) {
                 AppointmentsScreen(
-                    onAddAppointment = { navController.navigate("appointment_form") },
+                    onAddAppointment = { initialMillis -> navController.navigate("appointment_form?date=$initialMillis") },
                     onEditAppointment = { id -> navController.navigate("appointment_form/$id") },
                     onGoHome = { navController.popBackStack(Destination.Home.route, false) }
                 )
             }
-            composable("appointment_form") {
+            composable(
+                route = "appointment_form?date={date}",
+                arguments = listOf(navArgument("date") { type = NavType.LongType; defaultValue = -1L })
+            ) { backStackEntry ->
+                val dateArg = backStackEntry.arguments?.getLong("date") ?: -1L
                 AppointmentFormScreen(
                     appointmentId = null,
+                    initialDateMillis = if (dateArg > 0) dateArg else null,
                     onDone = { navController.popBackStack() }
                 )
             }
