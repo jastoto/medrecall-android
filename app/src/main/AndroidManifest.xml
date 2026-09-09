@@ -58,13 +58,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <!-- MSAL's OAuth redirect comes back through this activity, the
-             path is our debug-keystore signature hash, URL-encoded, computed
-             per Microsoft's Android quickstart. Must match the Android
-             platform config (package name com.asok.medrecall + signature
-             hash) added to the Azure App Registration, or MSAL's sign-in
-             will fail with a redirect_uri mismatch. See
-             res/raw/msal_config.json for the same redirect_uri. -->
+        <!-- MSAL's OAuth redirect comes back through this activity. The
+             redirect_uri registered in Azure (and in res/raw/msal_config.json)
+             still carries our debug-keystore signature hash in its path, but
+             we deliberately do NOT match on that path here: Android decodes
+             percent-escaped path characters (%2F, %3D) before comparing them
+             against the manifest's declared path, while the manifest's
+             android:path attribute is matched as literal text, so a path
+             containing an encoded "/" or "=" silently fails to match its own
+             redirect (real bug hit 2026-09-09, surfaced as MSAL logging
+             "user_cancelled" with no visible transition when tapping
+             Continue on the sign-in page). Scheme + host alone are already
+             unique to this app on the device, so dropping the path
+             restriction is both correct and simpler. -->
         <activity
             android:name="com.microsoft.identity.client.BrowserTabActivity"
             android:exported="true">
@@ -76,8 +82,7 @@
 
                 <data
                     android:scheme="msauth"
-                    android:host="com.asok.medrecall"
-                    android:path="/xX4B7C0UGmlCJ8yMzlQQ1%2FikpYY%3D" />
+                    android:host="com.asok.medrecall" />
             </intent-filter>
         </activity>
         <provider
