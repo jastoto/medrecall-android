@@ -2,9 +2,9 @@
     <string name="app_name">MedRecall+</string>
 
     <!-- Google Sign-In (Settings > Account > Google Drive). This is the
-         OAuth "Web application" client ID from Google Cloud Console
-         (Credential Manager needs a Web client ID as the token audience,
-         even though this is an Android app), NOT the Android client ID.
-         Replace the placeholder below once the Google Cloud project is set up. -->
-    <string name="google_web_client_id" translatable="false">REPLACE_WITH_YOUR_WEB_CLIENT_ID.apps.googleusercontent.com</string>
+         OAuth "Web application" client ID from the "MedRecall-Android"
+         Google Cloud project (Credential Manager needs a Web client ID
+         as the token audience, even though this is an Android app),
+         NOT the Android client ID. -->
+    <string name="google_web_client_id" translatable="false">276913449272-2c83dpct0g4ug59ukaagvrcrqmbi2qd3.apps.googleusercontent.com</string>
 </resources>
