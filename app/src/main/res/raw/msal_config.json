@@ -1,5 +1,5 @@
 {
-  "client_id": "PASTE_YOUR_AZURE_APPLICATION_CLIENT_ID_HERE",
+  "client_id": "fb485f6f-b773-4c0a-8772-4ef2b1e1738e",
   "authorization_user_agent": "DEFAULT",
   "redirect_uri": "msauth://com.asok.medrecall/xX4B7C0UGmlCJ8yMzlQQ1%2FikpYY%3D",
   "account_mode": "SINGLE",
