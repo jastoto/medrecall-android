@@ -22,6 +22,13 @@ data class SyncCalendarSelection(
     val providerLabel: String
 )
 
+/** Settings > Account's Google Drive row -- see [SettingsRepository.googleAccount]. */
+data class GoogleAccountSelection(
+    val email: String,
+    val displayName: String?,
+    val driveConnected: Boolean
+)
+
 /**
  * Backs the Settings > Security screen (app-lock) and the Settings >
  * Calendar Sync row (which device calendar, if any, appointments sync to --
@@ -43,6 +50,9 @@ class SettingsRepository private constructor(private val context: Context) {
         val SYNC_CALENDAR_ID = longPreferencesKey("sync_calendar_id")
         val SYNC_CALENDAR_NAME = stringPreferencesKey("sync_calendar_name")
         val SYNC_CALENDAR_PROVIDER = stringPreferencesKey("sync_calendar_provider")
+        val GOOGLE_ACCOUNT_EMAIL = stringPreferencesKey("google_account_email")
+        val GOOGLE_ACCOUNT_NAME = stringPreferencesKey("google_account_name")
+        val GOOGLE_DRIVE_CONNECTED = booleanPreferencesKey("google_drive_connected")
     }
 
     val biometricLockEnabled: Flow<Boolean> =
@@ -65,6 +75,22 @@ class SettingsRepository private constructor(private val context: Context) {
                 calendarId = id,
                 displayName = prefs[Keys.SYNC_CALENDAR_NAME] ?: "Calendar",
                 providerLabel = prefs[Keys.SYNC_CALENDAR_PROVIDER] ?: ""
+            )
+        }
+
+    /**
+     * Null means no Google account is connected under Settings > Account.
+     * Only identity (email/name) and a connected flag are stored here --
+     * OAuth access tokens are short-lived and kept in memory only (see
+     * GoogleAccountManager), never written to disk.
+     */
+    val googleAccount: Flow<GoogleAccountSelection?> =
+        context.settingsDataStore.data.map { prefs ->
+            val email = prefs[Keys.GOOGLE_ACCOUNT_EMAIL] ?: return@map null
+            GoogleAccountSelection(
+                email = email,
+                displayName = prefs[Keys.GOOGLE_ACCOUNT_NAME],
+                driveConnected = prefs[Keys.GOOGLE_DRIVE_CONNECTED] ?: false
             )
         }
 
@@ -109,6 +135,27 @@ class SettingsRepository private constructor(private val context: Context) {
             prefs.remove(Keys.SYNC_CALENDAR_ID)
             prefs.remove(Keys.SYNC_CALENDAR_NAME)
             prefs.remove(Keys.SYNC_CALENDAR_PROVIDER)
+        }
+    }
+
+    /** Records a successful Google sign-in. Call [setGoogleDriveConnected] separately once Drive authorization also succeeds. */
+    suspend fun setGoogleAccount(email: String, displayName: String?) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.GOOGLE_ACCOUNT_EMAIL] = email
+            displayName?.let { prefs[Keys.GOOGLE_ACCOUNT_NAME] = it }
+        }
+    }
+
+    suspend fun setGoogleDriveConnected(connected: Boolean) {
+        context.settingsDataStore.edit { prefs -> prefs[Keys.GOOGLE_DRIVE_CONNECTED] = connected }
+    }
+
+    /** Disconnects the Google account entirely (Settings > Account > Google Drive > Disconnect). */
+    suspend fun clearGoogleAccount() {
+        context.settingsDataStore.edit { prefs ->
+            prefs.remove(Keys.GOOGLE_ACCOUNT_EMAIL)
+            prefs.remove(Keys.GOOGLE_ACCOUNT_NAME)
+            prefs.remove(Keys.GOOGLE_DRIVE_CONNECTED)
         }
     }
 

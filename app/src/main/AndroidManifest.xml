@@ -4,6 +4,11 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Google Sign-In + Drive backup connector (Settings > Account):
+         needed for the Credential Manager sign-in flow and Drive REST
+         calls; see data/account/GoogleAccountManager.kt. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Calendar Sync (Settings > Calendar Sync): read/write whatever
          Google, Office/Exchange, or local calendar the user picks on this
          device; see data/calendar/DeviceCalendarManager.kt. -->
