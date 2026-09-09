@@ -24,6 +24,8 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -220,6 +222,31 @@ fun SettingsScreen(
                         )
                     }
                     SettingsCaption("MedRecall+ stores your records only on this device (plus any backups you've turned on). Deleting all data removes everything permanently -- back up first if you want to keep it.")
+                }
+            }
+
+            item {
+                Text(text = "Legal", style = MaterialTheme.typography.labelLarge)
+            }
+            item {
+                SettingsGroup {
+                    SettingsRow(
+                        icon = Icons.Default.Policy,
+                        title = "Privacy Policy",
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://medrecallplus.com/privacy-policy.html"))
+                            runCatching { context.startActivity(intent) }
+                        }
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        icon = Icons.Default.Gavel,
+                        title = "Terms of Service",
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://medrecallplus.com/terms-of-service.html"))
+                            runCatching { context.startActivity(intent) }
+                        }
+                    )
                 }
             }
 
