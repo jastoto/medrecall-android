@@ -3,6 +3,7 @@ package com.asok.medrecall.data.backup
 import com.asok.medrecall.data.local.MedRecallDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -92,7 +93,7 @@ object DriveBackupManager {
         val metadata = JSONObject().apply {
             put("name", name)
             put("mimeType", "application/vnd.google-apps.folder")
-            if (parentId != null) put("parents", listOf(parentId))
+            if (parentId != null) put("parents", JSONArray().put(parentId))
         }
         val createConnection = (URL(DRIVE_FILES_URL).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -111,7 +112,7 @@ object DriveBackupManager {
         val boundary = "medrecall-backup-${System.currentTimeMillis()}"
         val metadata = JSONObject().apply {
             put("name", fileName)
-            put("parents", listOf(folderId))
+            put("parents", JSONArray().put(folderId))
         }
 
         val connection = (URL(DRIVE_UPLOAD_URL).openConnection() as HttpURLConnection).apply {
