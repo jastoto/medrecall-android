@@ -30,6 +30,18 @@ data class GoogleAccountSelection(
 )
 
 /**
+ * Settings > Account's OneDrive row -- see [SettingsRepository.microsoftAccount].
+ * Unlike Google (separate sign-in + Drive-authorization steps), MSAL grants
+ * the Files.ReadWrite scope in the same interactive call as sign-in, so
+ * there's no separate "driveConnected" flag here -- a non-null selection
+ * means OneDrive access is already granted.
+ */
+data class MicrosoftAccountSelection(
+    val email: String,
+    val displayName: String?
+)
+
+/**
  * Backs the Settings > Security screen (app-lock) and the Settings >
  * Calendar Sync row (which device calendar, if any, appointments sync to --
  * see data/calendar/DeviceCalendarManager.kt). Nothing here is ever synced
@@ -53,6 +65,8 @@ class SettingsRepository private constructor(private val context: Context) {
         val GOOGLE_ACCOUNT_EMAIL = stringPreferencesKey("google_account_email")
         val GOOGLE_ACCOUNT_NAME = stringPreferencesKey("google_account_name")
         val GOOGLE_DRIVE_CONNECTED = booleanPreferencesKey("google_drive_connected")
+        val MICROSOFT_ACCOUNT_EMAIL = stringPreferencesKey("microsoft_account_email")
+        val MICROSOFT_ACCOUNT_NAME = stringPreferencesKey("microsoft_account_name")
     }
 
     val biometricLockEnabled: Flow<Boolean> =
@@ -156,6 +170,37 @@ class SettingsRepository private constructor(private val context: Context) {
             prefs.remove(Keys.GOOGLE_ACCOUNT_EMAIL)
             prefs.remove(Keys.GOOGLE_ACCOUNT_NAME)
             prefs.remove(Keys.GOOGLE_DRIVE_CONNECTED)
+        }
+    }
+
+    /**
+     * Null means no Microsoft account is connected under Settings > Account.
+     * Only identity (email/name) is stored here -- OAuth access tokens are
+     * short-lived and kept in memory only (see MicrosoftAccountManager),
+     * never written to disk.
+     */
+    val microsoftAccount: Flow<MicrosoftAccountSelection?> =
+        context.settingsDataStore.data.map { prefs ->
+            val email = prefs[Keys.MICROSOFT_ACCOUNT_EMAIL] ?: return@map null
+            MicrosoftAccountSelection(
+                email = email,
+                displayName = prefs[Keys.MICROSOFT_ACCOUNT_NAME]
+            )
+        }
+
+    /** Records a successful Microsoft sign-in (identity + OneDrive access granted together, see MicrosoftAccountManager). */
+    suspend fun setMicrosoftAccount(email: String, displayName: String?) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.MICROSOFT_ACCOUNT_EMAIL] = email
+            if (displayName != null) prefs[Keys.MICROSOFT_ACCOUNT_NAME] = displayName else prefs.remove(Keys.MICROSOFT_ACCOUNT_NAME)
+        }
+    }
+
+    /** Disconnects the Microsoft account entirely (Settings > Account > OneDrive > Disconnect). */
+    suspend fun clearMicrosoftAccount() {
+        context.settingsDataStore.edit { prefs ->
+            prefs.remove(Keys.MICROSOFT_ACCOUNT_EMAIL)
+            prefs.remove(Keys.MICROSOFT_ACCOUNT_NAME)
         }
     }
 

@@ -9,7 +9,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.asok.medrecall.data.account.DriveAuthOutcome
 import com.asok.medrecall.data.account.GoogleAccountManager
+import com.asok.medrecall.data.account.MicrosoftAccountManager
+import com.asok.medrecall.data.account.MicrosoftAuthOutcome
 import com.asok.medrecall.data.settings.GoogleAccountSelection
+import com.asok.medrecall.data.settings.MicrosoftAccountSelection
 import com.asok.medrecall.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,6 +26,13 @@ sealed class GoogleConnectState {
     data object SigningIn : GoogleConnectState()
     data object RequestingDriveAccess : GoogleConnectState()
     data class Error(val message: String) : GoogleConnectState()
+}
+
+/** What the OneDrive row under Settings > Account is currently doing. */
+sealed class MicrosoftConnectState {
+    data object Idle : MicrosoftConnectState()
+    data object SigningIn : MicrosoftConnectState()
+    data class Error(val message: String) : MicrosoftConnectState()
 }
 
 /**
@@ -39,6 +49,12 @@ class AccountViewModel(private val repository: SettingsRepository) : ViewModel()
 
     private val _connectState = MutableStateFlow<GoogleConnectState>(GoogleConnectState.Idle)
     val connectState: StateFlow<GoogleConnectState> = _connectState
+
+    val microsoftAccount: StateFlow<MicrosoftAccountSelection?> = repository.microsoftAccount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private val _microsoftConnectState = MutableStateFlow<MicrosoftConnectState>(MicrosoftConnectState.Idle)
+    val microsoftConnectState: StateFlow<MicrosoftConnectState> = _microsoftConnectState
 
     /** Set by [requestDriveAuthorization] when Play Services needs its own consent screen; the screen (AccountScreen) launches this via an ActivityResultLauncher. */
     private val _pendingResolution = MutableStateFlow<IntentSender?>(null)
@@ -103,6 +119,37 @@ class AccountViewModel(private val repository: SettingsRepository) : ViewModel()
 
     fun dismissError() {
         _connectState.value = GoogleConnectState.Idle
+    }
+
+    /** Starts the OneDrive connect flow (Settings > Account > OneDrive). MSAL grants identity + Files.ReadWrite together, so unlike Google Drive there's no separate consent-screen hand-off needed here. */
+    fun connectOneDrive(activity: Activity) {
+        viewModelScope.launch {
+            _microsoftConnectState.value = MicrosoftConnectState.SigningIn
+            when (val outcome = MicrosoftAccountManager.getAccessToken(activity)) {
+                is MicrosoftAuthOutcome.Authorized -> {
+                    repository.setMicrosoftAccount(outcome.info.email, outcome.info.displayName)
+                    _microsoftConnectState.value = MicrosoftConnectState.Idle
+                }
+                is MicrosoftAuthOutcome.Cancelled -> {
+                    _microsoftConnectState.value = MicrosoftConnectState.Idle
+                }
+                is MicrosoftAuthOutcome.Failed -> {
+                    _microsoftConnectState.value = MicrosoftConnectState.Error(outcome.message)
+                }
+            }
+        }
+    }
+
+    /** Disconnects the Microsoft account entirely (Settings > Account > OneDrive > Disconnect). */
+    fun disconnectOneDrive(context: Context) {
+        viewModelScope.launch {
+            MicrosoftAccountManager.signOut(context)
+            repository.clearMicrosoftAccount()
+        }
+    }
+
+    fun dismissMicrosoftError() {
+        _microsoftConnectState.value = MicrosoftConnectState.Idle
     }
 
     companion object {

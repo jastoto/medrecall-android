@@ -9,11 +9,17 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.asok.medrecall.data.account.DriveAuthOutcome
 import com.asok.medrecall.data.account.GoogleAccountManager
+import com.asok.medrecall.data.account.MicrosoftAccountManager
+import com.asok.medrecall.data.account.MicrosoftAuthOutcome
 import com.asok.medrecall.data.backup.BackupResult
 import com.asok.medrecall.data.backup.BackupSection
 import com.asok.medrecall.data.backup.DriveBackupFile
 import com.asok.medrecall.data.backup.DriveBackupManager
 import com.asok.medrecall.data.backup.DriveRestoreManager
+import com.asok.medrecall.data.backup.OneDriveBackupFile
+import com.asok.medrecall.data.backup.OneDriveBackupManager
+import com.asok.medrecall.data.backup.OneDriveRestoreManager
+import com.asok.medrecall.data.backup.OneDriveSectionBackups
 import com.asok.medrecall.data.backup.RestoreResult
 import com.asok.medrecall.data.backup.SectionBackups
 import com.asok.medrecall.data.local.MedRecallDatabase
@@ -40,6 +46,8 @@ sealed class RestoreRunState {
     data object AuthorizingDrive : RestoreRunState()
     data object LoadingBackups : RestoreRunState()
     data class Picking(val sections: List<SectionBackups>, val accessToken: String) : RestoreRunState()
+    /** Same as [Picking] but for OneDrive's file listing shape (no Drive file id -- see OneDriveBackupFile). */
+    data class PickingOneDrive(val sections: List<OneDriveSectionBackups>, val accessToken: String) : RestoreRunState()
     data object Restoring : RestoreRunState()
     data class Done(val results: List<RestoreResult>) : RestoreRunState()
     data class Error(val message: String) : RestoreRunState()
@@ -222,6 +230,75 @@ class BackupViewModel(private val settingsRepository: SettingsRepository) : View
 
     fun dismissResult() {
         _runState.value = BackupRunState.Idle
+    }
+
+    /** Kicks off Back Up Now for OneDrive. Unlike Google Drive's separate consent-launcher hand-off, MicrosoftAccountManager.getAccessToken already handles any interactive sign-in it needs internally, so this is a single call. */
+    fun backUpToOneDrive(activity: Activity) {
+        val sections = sectionsForCurrentMode()
+        if (sections.isEmpty()) {
+            _runState.value = BackupRunState.Error("Pick at least one section to back up.")
+            return
+        }
+
+        viewModelScope.launch {
+            _runState.value = BackupRunState.AuthorizingDrive
+            when (val outcome = MicrosoftAccountManager.getAccessToken(activity)) {
+                is MicrosoftAuthOutcome.Authorized -> {
+                    _runState.value = BackupRunState.Uploading
+                    val database = MedRecallDatabase.getInstance(activity.applicationContext)
+                    _runState.value = BackupRunState.Done(OneDriveBackupManager.backupSections(database, outcome.info.accessToken, sections))
+                }
+                is MicrosoftAuthOutcome.Cancelled -> {
+                    _runState.value = BackupRunState.Idle
+                }
+                is MicrosoftAuthOutcome.Failed -> {
+                    _runState.value = BackupRunState.Error(outcome.message)
+                }
+            }
+        }
+    }
+
+    /** Kicks off Settings > Backup & Restore's "Restore" for OneDrive: get a fresh token, then list what's available to restore from. */
+    fun startOneDriveRestore(activity: Activity) {
+        viewModelScope.launch {
+            _restoreState.value = RestoreRunState.AuthorizingDrive
+            when (val outcome = MicrosoftAccountManager.getAccessToken(activity)) {
+                is MicrosoftAuthOutcome.Authorized -> {
+                    _restoreState.value = RestoreRunState.LoadingBackups
+                    try {
+                        val token = outcome.info.accessToken
+                        val grouped = OneDriveRestoreManager.groupForPicker(OneDriveRestoreManager.listAvailableBackups(token))
+                        _restoreState.value = if (grouped.isEmpty()) {
+                            RestoreRunState.Error("No backups found yet in OneDrive > MedRecall > Android Backup.")
+                        } else {
+                            RestoreRunState.PickingOneDrive(grouped, token)
+                        }
+                    } catch (e: Exception) {
+                        _restoreState.value = RestoreRunState.Error(e.message ?: "Could not read backups from OneDrive.")
+                    }
+                }
+                is MicrosoftAuthOutcome.Cancelled -> {
+                    _restoreState.value = RestoreRunState.Idle
+                }
+                is MicrosoftAuthOutcome.Failed -> {
+                    _restoreState.value = RestoreRunState.Error(outcome.message)
+                }
+            }
+        }
+    }
+
+    /** Called once the user confirms which section/date combinations to restore in the OneDrive picker dialog. Each chosen file REPLACES that section's current data. */
+    fun confirmOneDriveRestore(activity: Activity, accessToken: String, chosen: List<OneDriveBackupFile>) {
+        if (chosen.isEmpty()) {
+            _restoreState.value = RestoreRunState.Error("Pick at least one section to restore.")
+            return
+        }
+        viewModelScope.launch {
+            _restoreState.value = RestoreRunState.Restoring
+            val database = MedRecallDatabase.getInstance(activity.applicationContext)
+            val results = chosen.map { file -> OneDriveRestoreManager.restoreFile(database, accessToken, file) }
+            _restoreState.value = RestoreRunState.Done(results)
+        }
     }
 
     companion object {

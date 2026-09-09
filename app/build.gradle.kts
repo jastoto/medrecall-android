@@ -58,6 +58,9 @@ dependencies {
     implementation(libs.googleid)
     implementation(libs.play.services.auth)
     implementation(libs.kotlinx.coroutines.play.services)
+    // Microsoft/OneDrive account connector (Settings > Account) -- MSAL, see
+    // data/account/MicrosoftAccountManager.kt and res/raw/msal_config.json.
+    implementation("com.microsoft.identity.client:msal:8.4.2")
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

@@ -4,9 +4,11 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Google Sign-In + Drive backup connector (Settings > Account):
-         needed for the Credential Manager sign-in flow and Drive REST
-         calls; see data/account/GoogleAccountManager.kt. -->
+    <!-- Google Sign-In + Drive backup connector, and Microsoft/OneDrive
+         connector (Settings > Account): needed for the Credential Manager /
+         MSAL sign-in flows and Drive/Graph REST calls; see
+         data/account/GoogleAccountManager.kt and
+         data/account/MicrosoftAccountManager.kt. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Calendar Sync (Settings > Calendar Sync): read/write whatever
@@ -54,6 +56,28 @@
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- MSAL's OAuth redirect comes back through this activity, the
+             path is our debug-keystore signature hash, URL-encoded, computed
+             per Microsoft's Android quickstart. Must match the Android
+             platform config (package name com.asok.medrecall + signature
+             hash) added to the Azure App Registration, or MSAL's sign-in
+             will fail with a redirect_uri mismatch. See
+             res/raw/msal_config.json for the same redirect_uri. -->
+        <activity
+            android:name="com.microsoft.identity.client.BrowserTabActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="msauth"
+                    android:host="com.asok.medrecall"
+                    android:path="/xX4B7C0UGmlCJ8yMzlQQ1%2FikpYY%3D" />
             </intent-filter>
         </activity>
         <provider

@@ -50,12 +50,14 @@ private val familySharingRows = listOf(
  * Settings > Account. Three groups: cloud storage accounts, health system
  * connections (Epic Sandbox), and family sharing.
  *
- * Google Drive is the one real connector here -- tapping it runs an actual
- * Credential Manager sign-in followed by a Drive-scope authorization request
- * (see AccountViewModel / GoogleAccountManager). OneDrive, Epic Sandbox, and
- * Family Sharing are still UI shells -- tapping them explains what's coming
- * rather than starting a real flow, since their API credentials (Azure,
- * Epic App Orchard) haven't been set up.
+ * Google Drive and OneDrive are both real connectors here -- tapping Google
+ * Drive runs an actual Credential Manager sign-in followed by a Drive-scope
+ * authorization request (see AccountViewModel / GoogleAccountManager);
+ * tapping OneDrive runs MSAL's sign-in, which grants identity + Files
+ * access together in one step (see AccountViewModel / MicrosoftAccountManager).
+ * Epic Sandbox and Family Sharing are still UI shells -- tapping them
+ * explains what's coming rather than starting a real flow, since Epic App
+ * Orchard credentials haven't been set up.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,10 +69,12 @@ fun AccountScreen(onGoHome: () -> Unit) {
     val googleAccount by viewModel.googleAccount.collectAsState()
     val connectState by viewModel.connectState.collectAsState()
     val pendingResolution by viewModel.pendingResolution.collectAsState()
+    val microsoftAccount by viewModel.microsoftAccount.collectAsState()
+    val microsoftConnectState by viewModel.microsoftConnectState.collectAsState()
 
     var dialogFor by remember { mutableStateOf<AccountLinkRow?>(null) }
     var showDisconnectConfirm by remember { mutableStateOf(false) }
-    var showOneDriveComingSoon by remember { mutableStateOf(false) }
+    var showDisconnectOneDriveConfirm by remember { mutableStateOf(false) }
 
     val consentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
@@ -121,12 +125,23 @@ fun AccountScreen(onGoHome: () -> Unit) {
                         )
                     }
                     SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.CloudQueue,
-                        title = "OneDrive",
-                        subtitle = "Not connected",
-                        onClick = { showOneDriveComingSoon = true }
-                    )
+                    if (microsoftConnectState is MicrosoftConnectState.SigningIn) {
+                        MicrosoftConnectingRow()
+                    } else if (microsoftAccount != null) {
+                        SettingsRow(
+                            icon = Icons.Default.CloudQueue,
+                            title = "OneDrive",
+                            subtitle = "Connected as ${microsoftAccount?.displayName ?: microsoftAccount?.email}",
+                            onClick = { showDisconnectOneDriveConfirm = true }
+                        )
+                    } else {
+                        SettingsRow(
+                            icon = Icons.Default.CloudQueue,
+                            title = "OneDrive",
+                            subtitle = "Not connected -- tap to sign in",
+                            onClick = { activity?.let { viewModel.connectOneDrive(it) } }
+                        )
+                    }
                 }
             }
 
@@ -166,11 +181,32 @@ fun AccountScreen(onGoHome: () -> Unit) {
         ComingSoonDialog(title = row.title, message = row.comingSoonMessage, onDismiss = { dialogFor = null })
     }
 
-    if (showOneDriveComingSoon) {
-        ComingSoonDialog(
-            title = "OneDrive",
-            message = "Signing in to OneDrive is coming in a future update. Once connected, MedRecall+ will use it for backups and syncing across devices.",
-            onDismiss = { showOneDriveComingSoon = false }
+    if (showDisconnectOneDriveConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDisconnectOneDriveConfirm = false },
+            title = { Text("Disconnect OneDrive?") },
+            text = { Text("MedRecall+ will no longer have access to your OneDrive. You can reconnect at any time.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.disconnectOneDrive(context)
+                    showDisconnectOneDriveConfirm = false
+                }) { Text("Disconnect") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisconnectOneDriveConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    val microsoftErrorState = microsoftConnectState
+    if (microsoftErrorState is MicrosoftConnectState.Error) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissMicrosoftError() },
+            title = { Text("OneDrive") },
+            text = { Text(microsoftErrorState.message) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissMicrosoftError() }) { Text("OK") }
+            }
         )
     }
 
@@ -217,6 +253,17 @@ private fun GoogleDriveConnectingRow(state: GoogleConnectState) {
     ) {
         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
         Text(text = label, modifier = Modifier.padding(start = 16.dp), style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+@Composable
+private fun MicrosoftConnectingRow() {
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        Text(text = "Signing in...", modifier = Modifier.padding(start = 16.dp), style = MaterialTheme.typography.bodyLarge)
     }
 }
 
