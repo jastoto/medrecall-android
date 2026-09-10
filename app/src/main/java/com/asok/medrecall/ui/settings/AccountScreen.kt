@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudQueue
-import androidx.compose.material.icons.filled.FamilyRestroom
 import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,22 +41,18 @@ private val healthSystemRows = listOf(
     AccountLinkRow(Icons.Default.LocalHospital, "Epic Sandbox", "Connecting to Epic's patient-portal sandbox is coming in a future update. Once connected, MedRecall+ will be able to pull records directly from your health system.")
 )
 
-private val familySharingRows = listOf(
-    AccountLinkRow(Icons.Default.FamilyRestroom, "Share Reports with Family", "Family sharing is coming in a future update. Once available, you'll be able to give family members view access to your reports.")
-)
-
 /**
- * Settings > Account. Three groups: cloud storage accounts, health system
- * connections (Epic Sandbox), and family sharing.
+ * Settings > Account. Two groups: cloud storage accounts and health system
+ * connections (Epic Sandbox).
  *
  * Google Drive and OneDrive are both real connectors here -- tapping Google
  * Drive runs an actual Credential Manager sign-in followed by a Drive-scope
  * authorization request (see AccountViewModel / GoogleAccountManager);
  * tapping OneDrive runs MSAL's sign-in, which grants identity + Files
  * access together in one step (see AccountViewModel / MicrosoftAccountManager).
- * Epic Sandbox and Family Sharing are still UI shells -- tapping them
- * explains what's coming rather than starting a real flow, since Epic App
- * Orchard credentials haven't been set up.
+ * Epic Sandbox is still a UI shell -- tapping it explains what's coming
+ * rather than starting a real flow, since Epic App Orchard credentials
+ * haven't been set up.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -156,21 +151,6 @@ fun AccountScreen(onGoHome: () -> Unit) {
                             onClick = { dialogFor = row }
                         )
                         if (index != healthSystemRows.lastIndex) SettingsDivider()
-                    }
-                }
-            }
-
-            item { AccountSectionHeader("Family Sharing") }
-            item {
-                SettingsGroup {
-                    familySharingRows.forEachIndexed { index, row ->
-                        SettingsRow(
-                            icon = row.icon,
-                            title = row.title,
-                            subtitle = "Off",
-                            onClick = { dialogFor = row }
-                        )
-                        if (index != familySharingRows.lastIndex) SettingsDivider()
                     }
                 }
             }

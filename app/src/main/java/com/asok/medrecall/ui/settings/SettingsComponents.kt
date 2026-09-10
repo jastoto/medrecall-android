@@ -132,7 +132,7 @@ fun SettingsDivider() {
     HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
 }
 
-/** Generic "this isn't wired up yet" dialog for the cloud-account rows (Google Drive, OneDrive, Epic, Family Sharing). */
+/** Generic "this isn't wired up yet" dialog for the cloud-account rows (Google Drive, OneDrive, Epic). */
 @Composable
 fun ComingSoonDialog(title: String, message: String, onDismiss: () -> Unit) {
     AlertDialog(

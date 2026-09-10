@@ -2,7 +2,6 @@ package com.asok.medrecall.ui.help
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.FamilyRestroom
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.LocalHospital
@@ -175,18 +174,6 @@ val helpTopics: List<HelpTopic> = buildList {
             setupSteps = listOf("Turn on fall detection in your watch's own app or settings, if your watch supports it."),
             useSteps = listOf("Your watch handles the alert and any emergency-contact flow on its own. MedRecall+ shows Falls as a watch-only placeholder on the Vitals screen for now."),
             comingSoonNote = "Fall detection inside MedRecall+ isn't available yet -- there's no Health Connect data type for it, so there's nothing to connect here yet."
-        )
-    )
-    add(
-        HelpTopic(
-            id = "family_sharing",
-            title = "Family Sharing",
-            icon = Icons.Default.FamilyRestroom,
-            tint = Color(0xFFA477D6),
-            summary = "Give family members view access to your reports.",
-            setupSteps = listOf("Open Settings, tap Account, then find \"Share Reports with Family\" under Family Sharing."),
-            useSteps = listOf("Tap the row to turn sharing on and choose who can see your reports, once it's live."),
-            comingSoonNote = "Family Sharing isn't wired up yet -- tapping the row currently explains what it will do rather than sharing anything."
         )
     )
     add(
