@@ -9,9 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asok.medrecall.R
 
 // Coral/red background sampled from the original iOS splash screen.
 private val SplashBackground = Color(0xFFEB4C46)
@@ -29,9 +29,8 @@ private val SplashSubtitleColor = Color.White.copy(alpha = 0.92f)
 private val SplashAttributionColor = Color.White.copy(alpha = 0.65f)
 
 /**
- * First screen shown on app launch, matching the original iOS splash
- * (mic icon in a soft circle, "MedRecall" title, tagline, attribution)
- * on a coral background. Held on screen for 2.5s by the caller
+ * First screen shown on app launch: the app icon glyph in a soft circle,
+ * "MedRecall" title, tagline, attribution, on a coral background. Held on screen for 2.5s by the caller
  * (see the LaunchedEffect/delay in MedRecallApp.kt) before it's replaced
  * by the normal lock-check/home flow -- this composable itself has no
  * timing or navigation logic, it's just the visual.
@@ -55,11 +54,10 @@ fun SplashScreen() {
                     .background(color = SplashCircle, shape = CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Mic,
+                Image(
+                    painter = painterResource(id = R.drawable.ic_splash_glyph),
                     contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(64.dp)
+                    modifier = Modifier.size(88.dp)
                 )
             }
 

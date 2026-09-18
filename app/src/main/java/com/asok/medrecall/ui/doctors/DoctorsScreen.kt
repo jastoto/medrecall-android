@@ -186,7 +186,7 @@ private fun DoctorTile(doctor: Doctor, onClick: () -> Unit, modifier: Modifier =
         Text(
             doctor.name,
             style = MaterialTheme.typography.labelLarge,
-            color = Color.Black,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 4.dp)

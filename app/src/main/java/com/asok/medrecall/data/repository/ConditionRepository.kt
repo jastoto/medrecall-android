@@ -18,4 +18,6 @@ class ConditionRepository(private val conditionDao: ConditionDao) {
     }
 
     suspend fun delete(condition: Condition) = conditionDao.delete(condition)
+
+    suspend fun addCondition(condition: Condition): Long = conditionDao.insert(condition)
 }

@@ -14,7 +14,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
@@ -28,6 +27,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.CenterAlignedTopAppBar
+import com.asok.medrecall.ui.components.BackIconButton
+import com.asok.medrecall.ui.components.SaveIconButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -49,7 +50,6 @@ import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 
 private val glucoseContextOptions = listOf("Fasting", "Before Meal", "After Meal", "Other")
@@ -109,7 +109,32 @@ fun VitalEntryFormScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(title = { Text(if (readingId == null) "Log ${vitalType.title}" else "Edit ${vitalType.title}", fontWeight = FontWeight.Bold, color = Color.Black) })
+            CenterAlignedTopAppBar(
+                title = { Text(if (readingId == null) "Log ${vitalType.title}" else "Edit ${vitalType.title}", fontWeight = FontWeight.Bold) },
+                navigationIcon = { BackIconButton(onClick = onDone) },
+                actions = {
+                    SaveIconButton(
+                        enabled = isValid,
+                        onClick = {
+                            coroutineScope.launch {
+                                viewModel.saveReading(
+                                    VitalReading(
+                                        id = editingId,
+                                        type = vitalType.id,
+                                        recordedAt = dateMillis,
+                                        primaryValue = primaryText.toDouble(),
+                                        secondaryValue = if (vitalType == VitalType.BLOOD_PRESSURE) secondaryText.toDoubleOrNull() else null,
+                                        tertiaryValue = if (vitalType == VitalType.BLOOD_PRESSURE) tertiaryText.toDoubleOrNull() else null,
+                                        context = if (vitalType == VitalType.BLOOD_GLUCOSE) readingContext else null,
+                                        notes = notes.trim().ifBlank { null }
+                                    )
+                                )
+                                onDone()
+                            }
+                        }
+                    )
+                }
+            )
         }
     ) { innerPadding ->
         Column(
@@ -251,42 +276,17 @@ fun VitalEntryFormScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp)
             )
 
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
-                Button(
+            if (readingId != null) {
+                TextButton(
                     onClick = {
                         coroutineScope.launch {
-                            viewModel.saveReading(
-                                VitalReading(
-                                    id = editingId,
-                                    type = vitalType.id,
-                                    recordedAt = dateMillis,
-                                    primaryValue = primaryText.toDouble(),
-                                    secondaryValue = if (vitalType == VitalType.BLOOD_PRESSURE) secondaryText.toDoubleOrNull() else null,
-                                    tertiaryValue = if (vitalType == VitalType.BLOOD_PRESSURE) tertiaryText.toDoubleOrNull() else null,
-                                    context = if (vitalType == VitalType.BLOOD_GLUCOSE) readingContext else null,
-                                    notes = notes.trim().ifBlank { null }
-                                )
-                            )
+                            viewModel.getReading(editingId)?.let { viewModel.deleteReading(it) }
                             onDone()
                         }
                     },
-                    modifier = Modifier.weight(1f),
-                    enabled = isValid
+                    modifier = Modifier.padding(top = 20.dp)
                 ) {
-                    Text("Save")
-                }
-                if (readingId != null) {
-                    TextButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                viewModel.getReading(editingId)?.let { viewModel.deleteReading(it) }
-                                onDone()
-                            }
-                        },
-                        modifier = Modifier.padding(start = 8.dp)
-                    ) {
-                        Text("Delete")
-                    }
+                    Text("Delete")
                 }
             }
         }

@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
@@ -54,7 +55,8 @@ fun RaisedIconSurface(
     iconSize: Dp = 38.dp,
     cornerRadius: Dp = 28.dp,
     tileSize: Dp? = null,
-    elevation: Dp = 18.dp
+    elevation: Dp = 18.dp,
+    enabled: Boolean = true
 ) {
     val topColor = gradientColors.first()
     val bottomColor = gradientColors.last()
@@ -66,6 +68,7 @@ fun RaisedIconSurface(
                 if (tileSize != null) Modifier.size(tileSize)
                 else Modifier.fillMaxWidth().aspectRatio(1f)
             )
+            .alpha(if (enabled) 1f else 0.4f)
             .shadow(
                 elevation = elevation,
                 shape = RoundedCornerShape(cornerRadius),
@@ -92,7 +95,7 @@ fun RaisedIconSurface(
                 ),
                 shape = RoundedCornerShape(cornerRadius)
             )
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         // Shadowed underside of the dome, anchored to the bottom edge.

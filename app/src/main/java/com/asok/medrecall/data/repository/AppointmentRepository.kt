@@ -16,11 +16,14 @@ class AppointmentRepository(
 
     suspend fun getAppointment(id: Int): Appointment? = appointmentDao.getById(id)
 
-    suspend fun save(appointment: Appointment) {
-        if (appointment.id == 0) {
-            appointmentDao.insert(appointment)
+    /** @return [appointment] with its final id filled in (Room only assigns one on insert). */
+    suspend fun save(appointment: Appointment): Appointment {
+        return if (appointment.id == 0) {
+            val newId = appointmentDao.insert(appointment)
+            appointment.copy(id = newId.toInt())
         } else {
             appointmentDao.update(appointment)
+            appointment
         }
     }
 

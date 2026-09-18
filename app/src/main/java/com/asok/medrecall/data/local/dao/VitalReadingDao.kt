@@ -10,6 +10,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface VitalReadingDao {
+    // Restore (Backup & Restore, "replace everything"): wipes the table
+    // before reinserting the backup's rows.
+    @Query("DELETE FROM vital_readings")
+    suspend fun deleteAll()
+
     @Insert
     suspend fun insert(reading: VitalReading): Long
 

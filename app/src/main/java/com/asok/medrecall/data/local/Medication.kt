@@ -13,5 +13,6 @@ data class Medication(
     val startDate: Long? = null,
     val endDate: Long? = null,
     val active: Boolean = true,
-    val notes: String? = null
+    val notes: String? = null,
+    val conditionId: Int? = null
 )

@@ -1,0 +1,16 @@
+{
+  "client_id": "fb485f6f-b773-4c0a-8772-4ef2b1e1738e",
+  "authorization_user_agent": "DEFAULT",
+  "redirect_uri": "msauth://com.asok.medrecall/M4q+Hk9jIDw2LMw0CnaPbPplpdM=",
+  "account_mode": "SINGLE",
+  "broker_redirect_uri_registered": false,
+  "authorities": [
+    {
+      "type": "AAD",
+      "audience": {
+        "type": "PersonalMicrosoftAccount"
+      },
+      "default": true
+    }
+  ]
+}

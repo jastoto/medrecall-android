@@ -1,6 +1,7 @@
 package com.asok.medrecall.ui
 
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -27,7 +28,10 @@ private val ELEVATION = 8.dp
  */
 @Composable
 fun MedRecallBottomBar(navController: NavHostController) {
-    Surface(tonalElevation = 3.dp) {
+    Surface(
+        tonalElevation = 3.dp,
+        modifier = Modifier.navigationBarsPadding()
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

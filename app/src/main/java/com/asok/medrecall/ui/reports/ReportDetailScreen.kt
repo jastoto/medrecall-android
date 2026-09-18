@@ -44,6 +44,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.asok.medrecall.ui.components.BackIconButton
 import com.asok.medrecall.ui.components.MedRecallTopBar
 
 /**
@@ -58,6 +59,7 @@ import com.asok.medrecall.ui.components.MedRecallTopBar
 fun ReportDetailScreen(
     reportType: ReportType,
     onGoHome: () -> Unit,
+    onBack: () -> Unit,
     viewModel: ReportDetailViewModel = viewModel(
         factory = ReportDetailViewModel.factory(LocalContext.current, reportType)
     )
@@ -70,7 +72,14 @@ fun ReportDetailScreen(
         topBar = {
             MedRecallTopBar(
                 title = reportType.title,
-                onGoHome = onGoHome
+                onGoHome = onGoHome,
+                actions = {
+                    // Orange back arrow, far right of the Home button --
+                    // goes back one level to the Reports grid, distinct
+                    // from Home (which jumps all the way to the home
+                    // screen). Punch-list #10 / #25.
+                    BackIconButton(onClick = onBack)
+                }
             )
         }
     ) { innerPadding ->

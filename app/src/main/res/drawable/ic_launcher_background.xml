@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Red gradient background for the adaptive launcher icon, sampled from the
+  new app icon artwork (top #FFC62828 -> bottom #FFD46363, vertical).
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:type="linear"
+        android:angle="270"
+        android:startColor="#FFC62828"
+        android:endColor="#FFD46363" />
+</shape>

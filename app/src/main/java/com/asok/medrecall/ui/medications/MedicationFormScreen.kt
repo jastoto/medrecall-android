@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -31,10 +30,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.asok.medrecall.data.local.Condition
 import com.asok.medrecall.data.local.Doctor
 import com.asok.medrecall.data.local.Medication
+import com.asok.medrecall.ui.components.AutocompleteTextField
+import com.asok.medrecall.ui.components.BackIconButton
+import com.asok.medrecall.ui.components.SaveIconButton
+import com.asok.medrecall.ui.conditions.defaultConditionIconKey
 import kotlinx.coroutines.launch
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,6 +57,8 @@ fun MedicationFormScreen(
     var schedule by remember { mutableStateOf("") }
     var doctorId by remember { mutableStateOf<Int?>(null) }
     var doctorNameField by remember { mutableStateOf("") }
+    var conditionId by remember { mutableStateOf<Int?>(null) }
+    var conditionNameField by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var active by remember { mutableStateOf(true) }
 
@@ -65,9 +70,11 @@ fun MedicationFormScreen(
                 dosage = existing.dosage.orEmpty()
                 schedule = existing.schedule.orEmpty()
                 doctorId = existing.prescribingDoctorId
+                conditionId = existing.conditionId
                 notes = existing.notes.orEmpty()
                 active = existing.active
                 doctorNameField = uiState.doctors.firstOrNull { it.id == existing.prescribingDoctorId }?.name.orEmpty()
+                conditionNameField = uiState.conditions.firstOrNull { it.id == existing.conditionId }?.name.orEmpty()
             }
             loadedExisting = true
         }
@@ -76,7 +83,56 @@ fun MedicationFormScreen(
     if (!loadedExisting) return
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text(if (medicationId == null) "New Medication" else "Edit Medication", fontWeight = FontWeight.Bold, color = Color.Black) }) }
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text(if (medicationId == null) "New Medication" else "Edit Medication", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    // Orange back arrow, top left -- leaves without saving,
+                    // matching the same Cancel/Save icon layout used by
+                    // every other form screen in the app.
+                    BackIconButton(onClick = onDone)
+                },
+                actions = {
+                    SaveIconButton(
+                        enabled = name.isNotBlank(),
+                        onClick = {
+                            coroutineScope.launch {
+                                var resolvedDoctorId = doctorId
+                                if (resolvedDoctorId == null && doctorNameField.isNotBlank()) {
+                                    resolvedDoctorId = viewModel.addDoctor(Doctor(name = doctorNameField.trim()))
+                                }
+                                var resolvedConditionId = conditionId
+                                if (resolvedConditionId == null && conditionNameField.isNotBlank()) {
+                                    // A condition created inline from this field
+                                    // inherits this medication's own prescribing doctor, since it's
+                                    // often the same doctor managing both.
+                                    resolvedConditionId = viewModel.addCondition(
+                                        Condition(
+                                            name = conditionNameField.trim(),
+                                            iconKey = defaultConditionIconKey,
+                                            doctorId = resolvedDoctorId
+                                        )
+                                    )
+                                }
+                                viewModel.saveMedication(
+                                    Medication(
+                                        id = editingId,
+                                        name = name.trim(),
+                                        dosage = dosage.trim().ifBlank { null },
+                                        schedule = schedule.trim().ifBlank { null },
+                                        prescribingDoctorId = resolvedDoctorId,
+                                        active = active,
+                                        notes = notes.trim().ifBlank { null },
+                                        conditionId = resolvedConditionId
+                                    )
+                                )
+                                onDone()
+                            }
+                        }
+                    )
+                }
+            )
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -116,6 +172,17 @@ fun MedicationFormScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
             )
 
+            AutocompleteTextField(
+                value = conditionNameField,
+                onValueChange = { newValue ->
+                    conditionNameField = newValue
+                    conditionId = uiState.conditions.firstOrNull { it.name.equals(newValue, ignoreCase = true) }?.id
+                },
+                label = "Condition this treats (optional)",
+                suggestions = uiState.conditions.map { it.name },
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+            )
+
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
@@ -132,45 +199,17 @@ fun MedicationFormScreen(
                 Text("Active")
             }
 
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
-                Button(
+            if (medicationId != null) {
+                TextButton(
                     onClick = {
                         coroutineScope.launch {
-                            var resolvedDoctorId = doctorId
-                            if (resolvedDoctorId == null && doctorNameField.isNotBlank()) {
-                                resolvedDoctorId = viewModel.addDoctor(Doctor(name = doctorNameField.trim()))
-                            }
-                            viewModel.saveMedication(
-                                Medication(
-                                    id = editingId,
-                                    name = name.trim(),
-                                    dosage = dosage.trim().ifBlank { null },
-                                    schedule = schedule.trim().ifBlank { null },
-                                    prescribingDoctorId = resolvedDoctorId,
-                                    active = active,
-                                    notes = notes.trim().ifBlank { null }
-                                )
-                            )
+                            viewModel.getMedication(editingId)?.let { viewModel.deleteMedication(it) }
                             onDone()
                         }
                     },
-                    modifier = Modifier.weight(1f),
-                    enabled = name.isNotBlank()
+                    modifier = Modifier.padding(top = 20.dp)
                 ) {
-                    Text("Save")
-                }
-                if (medicationId != null) {
-                    TextButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                viewModel.getMedication(editingId)?.let { viewModel.deleteMedication(it) }
-                                onDone()
-                            }
-                        },
-                        modifier = Modifier.padding(start = 8.dp)
-                    ) {
-                        Text("Delete")
-                    }
+                    Text("Delete")
                 }
             }
         }

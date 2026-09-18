@@ -10,6 +10,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface NoteDao {
+    // Restore (Backup & Restore, "replace everything"): wipes the table
+    // before reinserting the backup's rows.
+    @Query("DELETE FROM notes")
+    suspend fun deleteAll()
+
     @Insert
     suspend fun insert(note: Note): Long
 

@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -23,6 +22,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.CenterAlignedTopAppBar
+import com.asok.medrecall.ui.components.BackIconButton
+import com.asok.medrecall.ui.components.SaveIconButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -45,7 +46,6 @@ import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,6 +60,7 @@ fun AppointmentFormScreen(
 
     var loadedExisting by remember { mutableStateOf(appointmentId == null) }
     var editingId by remember { mutableStateOf(0) }
+    var editingGoogleCalendarEventId by remember { mutableStateOf<String?>(null) }
     var reason by remember { mutableStateOf("") }
     var dateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     var doctorId by remember { mutableStateOf<Int?>(null) }
@@ -69,11 +70,13 @@ fun AppointmentFormScreen(
     var completed by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var showPastConfirmDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(appointmentId) {
         if (appointmentId != null) {
             viewModel.getAppointment(appointmentId)?.let { existing ->
                 editingId = existing.id
+                editingGoogleCalendarEventId = existing.googleCalendarEventId
                 reason = existing.reason
                 dateMillis = existing.dateTime
                 doctorId = existing.doctorId
@@ -88,8 +91,47 @@ fun AppointmentFormScreen(
 
     if (!loadedExisting) return
 
+    val performSave: () -> Unit = {
+        coroutineScope.launch {
+            var resolvedDoctorId = doctorId
+            if (resolvedDoctorId == null && doctorNameField.isNotBlank()) {
+                resolvedDoctorId = viewModel.addDoctor(Doctor(name = doctorNameField.trim()))
+            }
+            viewModel.saveAppointment(
+                Appointment(
+                    id = editingId,
+                    dateTime = dateMillis,
+                    reason = reason.trim(),
+                    doctorId = resolvedDoctorId,
+                    location = location.trim().ifBlank { null },
+                    notes = notes.trim().ifBlank { null },
+                    completed = completed,
+                    googleCalendarEventId = editingGoogleCalendarEventId
+                )
+            )
+            onDone()
+        }
+    }
+
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text(if (appointmentId == null) "New Appointment" else "Edit Appointment", fontWeight = FontWeight.Bold, color = Color.Black) }) }
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text(if (appointmentId == null) "New Appointment" else "Edit Appointment", fontWeight = FontWeight.Bold) },
+                navigationIcon = { BackIconButton(onClick = onDone) },
+                actions = {
+                    SaveIconButton(
+                        enabled = reason.isNotBlank(),
+                        onClick = {
+                            if (!completed && dateMillis < System.currentTimeMillis()) {
+                                showPastConfirmDialog = true
+                            } else {
+                                performSave()
+                            }
+                        }
+                    )
+                }
+            )
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -150,45 +192,17 @@ fun AppointmentFormScreen(
                 Text("Completed")
             }
 
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
-                Button(
+            if (appointmentId != null) {
+                TextButton(
                     onClick = {
                         coroutineScope.launch {
-                            var resolvedDoctorId = doctorId
-                            if (resolvedDoctorId == null && doctorNameField.isNotBlank()) {
-                                resolvedDoctorId = viewModel.addDoctor(Doctor(name = doctorNameField.trim()))
-                            }
-                            viewModel.saveAppointment(
-                                Appointment(
-                                    id = editingId,
-                                    dateTime = dateMillis,
-                                    reason = reason.trim(),
-                                    doctorId = resolvedDoctorId,
-                                    location = location.trim().ifBlank { null },
-                                    notes = notes.trim().ifBlank { null },
-                                    completed = completed
-                                )
-                            )
+                            viewModel.getAppointment(editingId)?.let { viewModel.deleteAppointment(it) }
                             onDone()
                         }
                     },
-                    modifier = Modifier.weight(1f),
-                    enabled = reason.isNotBlank()
+                    modifier = Modifier.padding(top = 20.dp)
                 ) {
-                    Text("Save")
-                }
-                if (appointmentId != null) {
-                    TextButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                viewModel.getAppointment(editingId)?.let { viewModel.deleteAppointment(it) }
-                                onDone()
-                            }
-                        },
-                        modifier = Modifier.padding(start = 8.dp)
-                    ) {
-                        Text("Delete")
-                    }
+                    Text("Delete")
                 }
             }
         }
@@ -237,6 +251,28 @@ fun AppointmentFormScreen(
             },
             dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Cancel") } },
             text = { TimePicker(state = timePickerState) }
+        )
+    }
+
+    if (showPastConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showPastConfirmDialog = false },
+            title = { Text("Save appointment in the past?") },
+            text = {
+                Text(
+                    "This appointment is scheduled for ${formatDate(dateMillis)} at " +
+                        "${formatTime(dateMillis)}, which has already passed. Save it anyway?"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPastConfirmDialog = false
+                    performSave()
+                }) { Text("Save anyway") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPastConfirmDialog = false }) { Text("Cancel") }
+            }
         )
     }
 }

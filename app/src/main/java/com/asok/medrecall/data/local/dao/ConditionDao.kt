@@ -10,6 +10,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ConditionDao {
+    // Restore (Backup & Restore, "replace everything"): wipes the table
+    // before reinserting the backup's rows.
+    @Query("DELETE FROM conditions")
+    suspend fun deleteAll()
+
     @Insert
     suspend fun insert(condition: Condition): Long
 

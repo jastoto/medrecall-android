@@ -27,6 +27,7 @@ import com.asok.medrecall.navigation.Destination
 import com.asok.medrecall.ui.MedRecallBottomBar
 import com.asok.medrecall.ui.appointments.AppointmentFormScreen
 import com.asok.medrecall.ui.appointments.AppointmentsScreen
+import com.asok.medrecall.ui.appointments.PastAppointmentsScreen
 import com.asok.medrecall.ui.ask.AskMedRecallScreen
 import com.asok.medrecall.ui.conditions.ConditionFormScreen
 import com.asok.medrecall.ui.conditions.ConditionsScreen
@@ -149,10 +150,16 @@ private fun MedRecallNavHost() {
                 )
             }
             composable("settings_account") {
-                AccountScreen(onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+                AccountScreen(
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) },
+                    onBack = { navController.popBackStack() }
+                )
             }
             composable("settings_backup_restore") {
-                BackupRestoreScreen(onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+                BackupRestoreScreen(
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) },
+                    onBack = { navController.popBackStack() }
+                )
             }
             composable("settings_pin_setup") {
                 PinSetupScreen(
@@ -251,7 +258,8 @@ private fun MedRecallNavHost() {
                 val reportTypeId = backStackEntry.arguments?.getString("reportTypeId") ?: ReportType.HISTORY.id
                 ReportDetailScreen(
                     reportType = ReportType.fromId(reportTypeId),
-                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) },
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Destination.MedicalId.route) {
@@ -264,6 +272,14 @@ private fun MedRecallNavHost() {
                 AppointmentsScreen(
                     onAddAppointment = { navController.navigate("appointment_form") },
                     onEditAppointment = { id -> navController.navigate("appointment_form/$id") },
+                    onViewPastAppointments = { navController.navigate("past_appointments") },
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                )
+            }
+            composable("past_appointments") {
+                PastAppointmentsScreen(
+                    onEditAppointment = { id -> navController.navigate("appointment_form/$id") },
+                    onBack = { navController.popBackStack() },
                     onGoHome = { navController.popBackStack(Destination.Home.route, false) }
                 )
             }

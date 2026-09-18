@@ -33,8 +33,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.asok.medrecall.ui.components.BackIconButton
+import com.asok.medrecall.ui.components.SaveIconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +51,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.asok.medrecall.data.local.Condition
+import com.asok.medrecall.data.local.Doctor
+import com.asok.medrecall.ui.components.AutocompleteTextField
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +71,7 @@ fun ConditionFormScreen(
     onDone: () -> Unit,
     viewModel: ConditionsViewModel = viewModel(factory = ConditionsViewModel.factory(LocalContext.current))
 ) {
+    val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     var loadedExisting by remember { mutableStateOf(conditionId == null) }
@@ -75,6 +81,8 @@ fun ConditionFormScreen(
     var iconKey by remember { mutableStateOf(defaultConditionIconKey) }
     var notes by remember { mutableStateOf("") }
     var statusMenuExpanded by remember { mutableStateOf(false) }
+    var doctorId by remember { mutableStateOf<Int?>(null) }
+    var doctorNameField by remember { mutableStateOf("") }
 
     // Same fix as the doctor-picker dropdown on RecordVisitScreen: a plain
     // .clickable on a readOnly OutlinedTextField gets swallowed by the
@@ -97,6 +105,8 @@ fun ConditionFormScreen(
                 status = existing.status
                 iconKey = existing.iconKey
                 notes = existing.notes.orEmpty()
+                doctorId = existing.doctorId
+                doctorNameField = uiState.doctors.firstOrNull { it.id == existing.doctorId }?.name.orEmpty()
             }
             loadedExisting = true
         }
@@ -107,28 +117,33 @@ fun ConditionFormScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(if (conditionId == null) "Add Condition" else "Edit Condition", fontWeight = FontWeight.Bold, color = Color.Black) },
+                title = { Text(if (conditionId == null) "Add Condition" else "Edit Condition", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    TextButton(onClick = onDone) { Text("Cancel") }
+                    BackIconButton(onClick = onDone)
                 },
                 actions = {
-                    TextButton(
+                    SaveIconButton(
                         enabled = name.isNotBlank(),
                         onClick = {
                             coroutineScope.launch {
+                                var resolvedDoctorId = doctorId
+                                if (resolvedDoctorId == null && doctorNameField.isNotBlank()) {
+                                    resolvedDoctorId = viewModel.addDoctor(Doctor(name = doctorNameField.trim()))
+                                }
                                 viewModel.saveCondition(
                                     Condition(
                                         id = editingId,
                                         name = name.trim(),
                                         status = status,
                                         iconKey = iconKey,
-                                        notes = notes.trim().ifBlank { null }
+                                        notes = notes.trim().ifBlank { null },
+                                        doctorId = resolvedDoctorId
                                     )
                                 )
                                 onDone()
                             }
                         }
-                    ) { Text("Save") }
+                    )
                 }
             )
         }
@@ -174,6 +189,17 @@ fun ConditionFormScreen(
                     }
                 }
             }
+
+            AutocompleteTextField(
+                value = doctorNameField,
+                onValueChange = { newValue ->
+                    doctorNameField = newValue
+                    doctorId = uiState.doctors.firstOrNull { it.name.equals(newValue, ignoreCase = true) }?.id
+                },
+                label = "Doctor (optional)",
+                suggestions = uiState.doctors.map { it.name },
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+            )
 
             Text(
                 "Icon",

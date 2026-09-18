@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -27,6 +26,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CenterAlignedTopAppBar
+import com.asok.medrecall.ui.components.BackIconButton
+import com.asok.medrecall.ui.components.SaveIconButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,7 +49,6 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 
 private val bloodTypeOptions = listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Unknown")
@@ -114,7 +114,39 @@ fun MedicalIdFormScreen(
     if (!loadedExisting) return
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("Edit Medical ID", fontWeight = FontWeight.Bold, color = Color.Black) }) }
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Edit Medical ID", fontWeight = FontWeight.Bold) },
+                navigationIcon = { BackIconButton(onClick = onDone) },
+                actions = {
+                    SaveIconButton(
+                        enabled = name.isNotBlank(),
+                        onClick = {
+                            coroutineScope.launch {
+                                viewModel.savePatient(
+                                    Patient(
+                                        id = 1,
+                                        name = name.trim(),
+                                        addressLine = addressLine.trim().ifBlank { null },
+                                        city = city.trim().ifBlank { null },
+                                        state = state.trim().ifBlank { null },
+                                        zip = zip.trim().ifBlank { null },
+                                        dateOfBirth = dobMillis,
+                                        bloodType = bloodType.trim().ifBlank { null },
+                                        allergies = allergies.trim().ifBlank { null },
+                                        emergencyContactName = emergencyName.trim().ifBlank { null },
+                                        emergencyContactRelationship = emergencyRelationship.trim().ifBlank { null },
+                                        emergencyContactPhone = emergencyPhone.trim().ifBlank { null },
+                                        notes = uiState.patient?.notes
+                                    )
+                                )
+                                onDone()
+                            }
+                        }
+                    )
+                }
+            )
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -253,40 +285,6 @@ fun MedicalIdFormScreen(
                 label = { Text("Phone") },
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
             )
-
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) {
-                Button(
-                    onClick = {
-                        coroutineScope.launch {
-                            viewModel.savePatient(
-                                Patient(
-                                    id = 1,
-                                    name = name.trim(),
-                                    addressLine = addressLine.trim().ifBlank { null },
-                                    city = city.trim().ifBlank { null },
-                                    state = state.trim().ifBlank { null },
-                                    zip = zip.trim().ifBlank { null },
-                                    dateOfBirth = dobMillis,
-                                    bloodType = bloodType.trim().ifBlank { null },
-                                    allergies = allergies.trim().ifBlank { null },
-                                    emergencyContactName = emergencyName.trim().ifBlank { null },
-                                    emergencyContactRelationship = emergencyRelationship.trim().ifBlank { null },
-                                    emergencyContactPhone = emergencyPhone.trim().ifBlank { null },
-                                    notes = uiState.patient?.notes
-                                )
-                            )
-                            onDone()
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = name.isNotBlank()
-                ) {
-                    Text("Save")
-                }
-                TextButton(onClick = onDone, modifier = Modifier.padding(start = 8.dp)) {
-                    Text("Cancel")
-                }
-            }
         }
     }
 

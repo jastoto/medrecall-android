@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * MedRecall's shared "3D raised button" style: [RaisedIconSurface] (the
- * domed/shadowed/embossed icon look) plus a bold-black label centered
+ * domed/shadowed/embossed icon look) plus a theme-aware label centered
  * below it. This is the standard button look for the app: reuse this
  * composable for any new icon-tile button instead of a flat Card/Button.
  *
@@ -41,7 +41,7 @@ fun RaisedIconTile(
     tileSize: Dp? = null,
     elevation: Dp = 18.dp,
     labelStyle: TextStyle = MaterialTheme.typography.bodyMedium,
-    labelColor: Color = Color.Black,
+    labelColor: Color = MaterialTheme.colorScheme.onBackground,
     labelMaxLines: Int = 1,
     labelTopPadding: Dp = 8.dp
 ) {

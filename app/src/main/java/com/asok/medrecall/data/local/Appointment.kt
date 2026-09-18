@@ -11,5 +11,11 @@ data class Appointment(
     val doctorId: Int? = null,
     val location: String? = null,
     val notes: String? = null,
-    val completed: Boolean = false
+    val completed: Boolean = false,
+    // Set once this appointment has been pushed to Google Calendar (see
+    // data/calendar/), so later edits update the same event instead of
+    // creating a duplicate, and deleting the appointment removes the
+    // right event. Null means either Calendar isn't connected, or this
+    // appointment hasn't synced yet.
+    val googleCalendarEventId: String? = null
 )

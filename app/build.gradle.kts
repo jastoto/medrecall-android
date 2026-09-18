@@ -61,6 +61,14 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    // Backup & Restore -- Google Drive / OneDrive connectors.
+    // Only used to sign in and obtain an OAuth access token; the actual
+    // Drive/Graph API calls are plain REST (HttpURLConnection) in
+    // data/backup/, so no heavy generated API client libraries are needed.
+    implementation("com.google.android.gms:play-services-auth:21.4.0")
+    implementation("com.microsoft.identity.client:msal:6.0.1")
+
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

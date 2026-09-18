@@ -209,7 +209,7 @@ private fun SearchResultRow(
             Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
         }
         Column(modifier = Modifier.fillMaxWidth()) {
-            Text(result.title, fontWeight = FontWeight.SemiBold, color = Color.Black)
+            Text(result.title, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
             if (result.subtitle.isNotBlank()) {
                 Text(
                     result.subtitle,

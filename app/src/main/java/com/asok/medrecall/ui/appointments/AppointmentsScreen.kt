@@ -11,7 +11,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.Card
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -37,6 +39,7 @@ import com.asok.medrecall.ui.components.MedRecallTopBar
 fun AppointmentsScreen(
     onAddAppointment: () -> Unit,
     onEditAppointment: (Int) -> Unit,
+    onViewPastAppointments: () -> Unit,
     onGoHome: () -> Unit,
     viewModel: AppointmentsViewModel = viewModel(factory = AppointmentsViewModel.factory(LocalContext.current))
 ) {
@@ -46,7 +49,12 @@ fun AppointmentsScreen(
         topBar = {
             MedRecallTopBar(
                 title = "Appointments",
-                onGoHome = onGoHome
+                onGoHome = onGoHome,
+                actions = {
+                    IconButton(onClick = onViewPastAppointments) {
+                        Icon(Icons.Default.History, contentDescription = "Past appointments")
+                    }
+                }
             )
         },
         floatingActionButton = {

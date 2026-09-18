@@ -26,4 +26,6 @@ class DoctorRepository(
     }
 
     suspend fun delete(doctor: Doctor) = doctorDao.delete(doctor)
+
+    suspend fun addDoctor(doctor: Doctor): Long = doctorDao.insert(doctor)
 }
