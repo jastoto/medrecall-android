@@ -6,9 +6,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.asok.medrecall.data.local.Condition
 import com.asok.medrecall.data.local.Doctor
+import com.asok.medrecall.data.local.Medication
 import com.asok.medrecall.data.local.MedRecallDatabase
 import com.asok.medrecall.data.repository.ConditionRepository
-import com.asok.medrecall.data.repository.DoctorRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.stateIn
 data class ConditionsUiState(
     val conditions: List<Condition> = emptyList(),
     val doctors: List<Doctor> = emptyList(),
+    val medications: List<Medication> = emptyList(),
     val isLoading: Boolean = true
 )
 
@@ -25,18 +26,21 @@ data class ConditionsUiState(
  * viewModelScope.launch) so a screen can await the write before navigating
  * away -- same reasoning as the other feature ViewModels in this app.
  *
- * Also pulls in DoctorRepository (read-only list + addDoctor) so
- * ConditionFormScreen can offer the same "pick an existing doctor or type
- * a new one" field that MedicationFormScreen already has.
+ * Also wraps DoctorDao (read-only list + addDoctor, via ConditionRepository)
+ * so ConditionFormScreen can offer the same "pick an existing doctor or
+ * type a new one" field that MedicationFormScreen already has -- punch-list #5.
  */
 class ConditionsViewModel(
-    private val repository: ConditionRepository,
-    private val doctorRepository: DoctorRepository
+    private val repository: ConditionRepository
 ) : ViewModel() {
 
     val uiState: StateFlow<ConditionsUiState> =
-        combine(repository.observeConditions(), doctorRepository.observeDoctors()) { conditions, doctors ->
-            ConditionsUiState(conditions = conditions, doctors = doctors, isLoading = false)
+        combine(
+            repository.observeConditions(),
+            repository.observeMedications(),
+            repository.observeDoctors()
+        ) { conditions, medications, doctors ->
+            ConditionsUiState(conditions = conditions, medications = medications, doctors = doctors, isLoading = false)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -49,16 +53,15 @@ class ConditionsViewModel(
 
     suspend fun getCondition(id: Int): Condition? = repository.getCondition(id)
 
-    suspend fun addDoctor(doctor: Doctor): Int = doctorRepository.addDoctor(doctor).toInt()
+    suspend fun addDoctor(doctor: Doctor): Int = repository.addDoctor(doctor).toInt()
 
     companion object {
         fun factory(context: Context): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val db = MedRecallDatabase.getInstance(context)
-                val repo = ConditionRepository(db.conditionDao())
-                val doctorRepo = DoctorRepository(db.doctorDao(), db.appointmentDao())
-                return ConditionsViewModel(repo, doctorRepo) as T
+                val repo = ConditionRepository(db.conditionDao(), db.medicationDao(), db.doctorDao())
+                return ConditionsViewModel(repo) as T
             }
         }
     }

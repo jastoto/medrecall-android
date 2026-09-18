@@ -3,6 +3,7 @@ package com.asok.medrecall.data.local.dao
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.asok.medrecall.data.local.Medication
@@ -33,9 +34,16 @@ interface MedicationDao {
     @Query("SELECT * FROM medications WHERE prescribingDoctorId = :doctorId ORDER BY name ASC")
     fun observeByDoctor(doctorId: Int): Flow<List<Medication>>
 
+    @Query("SELECT * FROM medications WHERE conditionId = :conditionId ORDER BY name ASC")
+    fun observeByCondition(conditionId: Int): Flow<List<Medication>>
+
     @Query("SELECT * FROM medications WHERE id = :id")
     suspend fun getById(id: Int): Medication?
 
     @Query("SELECT * FROM medications ORDER BY name ASC")
     suspend fun getAllOnce(): List<Medication>
+
+    /** Bulk-inserts, replacing on id conflict -- used by BackupImporter after deleteAll() to reload a section from a Drive backup with its original ids intact. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllForRestore(items: List<Medication>)
 }

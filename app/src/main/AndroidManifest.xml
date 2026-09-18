@@ -9,6 +9,17 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Google Sign-In + Drive backup connector, and Microsoft/OneDrive
+         connector (Settings > Account): needed for the Credential Manager /
+         MSAL sign-in flows and Drive/Graph REST calls; see
+         data/account/GoogleAccountManager.kt and
+         data/account/MicrosoftAccountManager.kt. -->
+    <!-- Calendar Sync (Settings > Calendar Sync): read/write whatever
+         Google, Office/Exchange, or local calendar the user picks on this
+         device; see data/calendar/DeviceCalendarManager.kt. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
     <!-- Health Connect (Android's equivalent to Apple Health) read permissions
          for the Vitals feature: see data/health/HealthConnectManager.kt.
          MedRecall only ever reads; there are no matching WRITE_* permissions. -->
@@ -57,6 +68,33 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- MSAL's OAuth redirect comes back through this activity. The
+             redirect_uri registered in Azure (and in res/raw/msal_config.json)
+             still carries our debug-keystore signature hash in its path, but
+             we deliberately do NOT match on that path here: Android decodes
+             percent-escaped path characters (%2F, %3D) before comparing them
+             against the manifest's declared path, while the manifest's
+             android:path attribute is matched as literal text, so a path
+             containing an encoded "/" or "=" silently fails to match its own
+             redirect (real bug hit 2026-09-09, surfaced as MSAL logging
+             "user_cancelled" with no visible transition when tapping
+             Continue on the sign-in page). Scheme + host alone are already
+             unique to this app on the device, so dropping the path
+             restriction is both correct and simpler. -->
+        <activity
+            android:name="com.microsoft.identity.client.BrowserTabActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="msauth"
+                    android:host="com.asok.medrecall" />
+            </intent-filter>
+        </activity>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -67,25 +105,6 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- MSAL (OneDrive sign-in) redirect target. android:path below is
-             the base64 signature hash of this app's signing certificate;
-             see data/backup/README-onedrive-setup.md for how it was
-             generated. It MUST be regenerated (and this line + msal_config.json
-             both updated) if the app is ever re-signed with a different key,
-             e.g. moving from a debug build to a real release keystore. -->
-        <activity
-            android:name="com.microsoft.identity.client.BrowserTabActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="msauth"
-                    android:host="com.asok.medrecall"
-                    android:path="/M4q+Hk9jIDw2LMw0CnaPbPplpdM=" />
-            </intent-filter>
-        </activity>
     </application>
 
 </manifest>

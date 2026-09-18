@@ -30,4 +30,7 @@ class AppointmentRepository(
     suspend fun delete(appointment: Appointment) = appointmentDao.delete(appointment)
 
     suspend fun addDoctor(doctor: Doctor): Long = doctorDao.insert(doctor)
+
+    /** See AppointmentDao.clearAllDeviceCalendarEventIds -- used when switching or turning off calendar sync. */
+    suspend fun detachAllFromDeviceCalendar() = appointmentDao.clearAllDeviceCalendarEventIds()
 }

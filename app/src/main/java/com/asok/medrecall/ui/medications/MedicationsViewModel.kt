@@ -8,7 +8,6 @@ import com.asok.medrecall.data.local.Condition
 import com.asok.medrecall.data.local.Doctor
 import com.asok.medrecall.data.local.MedRecallDatabase
 import com.asok.medrecall.data.local.Medication
-import com.asok.medrecall.data.repository.ConditionRepository
 import com.asok.medrecall.data.repository.MedicationRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,20 +27,20 @@ data class MedicationsUiState(
  * navigate away once the write has actually landed in the database — same
  * reasoning as AppointmentsViewModel.
  *
- * Also pulls in ConditionRepository (read-only list + addCondition) so
- * MedicationFormScreen can offer the same "pick an existing condition or
- * type a new one" field it already has for doctors -- punch-list #4.
+ * Also wraps ConditionDao (read-only list + addCondition, via
+ * MedicationRepository) so MedicationFormScreen can offer the same "pick
+ * an existing condition or type a new one" field it already has for
+ * doctors -- punch-list #4.
  */
 class MedicationsViewModel(
-    private val repository: MedicationRepository,
-    private val conditionRepository: ConditionRepository
+    private val repository: MedicationRepository
 ) : ViewModel() {
 
     val uiState: StateFlow<MedicationsUiState> =
         combine(
             repository.observeMedications(),
             repository.observeDoctors(),
-            conditionRepository.observeConditions()
+            repository.observeConditions()
         ) { medications, doctors, conditions ->
             MedicationsUiState(medications = medications, doctors = doctors, conditions = conditions, isLoading = false)
         }.stateIn(
@@ -58,16 +57,15 @@ class MedicationsViewModel(
 
     suspend fun addDoctor(doctor: Doctor): Int = repository.addDoctor(doctor).toInt()
 
-    suspend fun addCondition(condition: Condition): Int = conditionRepository.addCondition(condition).toInt()
+    suspend fun addCondition(condition: Condition): Int = repository.addCondition(condition).toInt()
 
     companion object {
         fun factory(context: Context): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val db = MedRecallDatabase.getInstance(context)
-                val repo = MedicationRepository(db.medicationDao(), db.doctorDao())
-                val conditionRepo = ConditionRepository(db.conditionDao())
-                return MedicationsViewModel(repo, conditionRepo) as T
+                val repo = MedicationRepository(db.medicationDao(), db.doctorDao(), db.conditionDao())
+                return MedicationsViewModel(repo) as T
             }
         }
     }

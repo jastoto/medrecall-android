@@ -152,13 +152,13 @@ private fun MedRecallNavHost() {
             composable("settings_account") {
                 AccountScreen(
                     onGoHome = { navController.popBackStack(Destination.Home.route, false) },
-                    onBack = { navController.popBackStack() }
+                    onGoBack = { navController.popBackStack() }
                 )
             }
             composable("settings_backup_restore") {
                 BackupRestoreScreen(
                     onGoHome = { navController.popBackStack(Destination.Home.route, false) },
-                    onBack = { navController.popBackStack() }
+                    onGoBack = { navController.popBackStack() }
                 )
             }
             composable("settings_pin_setup") {
@@ -259,7 +259,7 @@ private fun MedRecallNavHost() {
                 ReportDetailScreen(
                     reportType = ReportType.fromId(reportTypeId),
                     onGoHome = { navController.popBackStack(Destination.Home.route, false) },
-                    onBack = { navController.popBackStack() }
+                    onGoBack = { navController.popBackStack() }
                 )
             }
             composable(Destination.MedicalId.route) {

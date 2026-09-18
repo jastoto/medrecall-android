@@ -1,5 +1,7 @@
 package com.asok.medrecall.ui.medications
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,15 +10,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CenterAlignedTopAppBar
+import com.asok.medrecall.ui.components.BackIconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,9 +42,9 @@ import com.asok.medrecall.data.local.Condition
 import com.asok.medrecall.data.local.Doctor
 import com.asok.medrecall.data.local.Medication
 import com.asok.medrecall.ui.components.AutocompleteTextField
-import com.asok.medrecall.ui.components.BackIconButton
 import com.asok.medrecall.ui.components.SaveIconButton
 import com.asok.medrecall.ui.conditions.defaultConditionIconKey
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 
@@ -59,8 +67,23 @@ fun MedicationFormScreen(
     var doctorNameField by remember { mutableStateOf("") }
     var conditionId by remember { mutableStateOf<Int?>(null) }
     var conditionNameField by remember { mutableStateOf("") }
+    var conditionMenuExpanded by remember { mutableStateOf(false) }
+    var showAddConditionDialog by remember { mutableStateOf(false) }
+    var newConditionName by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var active by remember { mutableStateOf(true) }
+
+    // Same readOnly-field/interactionSource fix as ConditionFormScreen's status
+    // dropdown -- a plain .clickable on a readOnly OutlinedTextField gets
+    // swallowed by the field's own pointer input.
+    val conditionFieldInteractionSource = remember { MutableInteractionSource() }
+    LaunchedEffect(conditionFieldInteractionSource) {
+        conditionFieldInteractionSource.interactions.collectLatest { interaction ->
+            if (interaction is PressInteraction.Release) {
+                conditionMenuExpanded = true
+            }
+        }
+    }
 
     LaunchedEffect(medicationId) {
         if (medicationId != null) {
@@ -164,13 +187,83 @@ fun MedicationFormScreen(
 
             DoctorDropdownField(
                 doctors = uiState.doctors,
-                selectedName = doctorNameField,
-                onNameChange = { name ->
-                    doctorNameField = name
-                    doctorId = uiState.doctors.firstOrNull { it.name.equals(name, ignoreCase = true) }?.id
-                },
+                selectedDoctorId = doctorId,
+                onSelect = { id -> doctorId = id },
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
             )
+
+            Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                OutlinedTextField(
+                    value = uiState.conditions.firstOrNull { it.id == conditionId }?.name ?: "None",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Condition this treats (optional)") },
+                    trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null) },
+                    interactionSource = conditionFieldInteractionSource,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                DropdownMenu(
+                    expanded = conditionMenuExpanded,
+                    onDismissRequest = { conditionMenuExpanded = false },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("None") },
+                        onClick = {
+                            conditionId = null
+                            conditionMenuExpanded = false
+                        }
+                    )
+                    uiState.conditions.forEach { condition ->
+                        DropdownMenuItem(
+                            text = { Text(condition.name) },
+                            onClick = {
+                                conditionId = condition.id
+                                conditionMenuExpanded = false
+                            }
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("+ Add new condition") },
+                        onClick = {
+                            conditionMenuExpanded = false
+                            newConditionName = ""
+                            showAddConditionDialog = true
+                        }
+                    )
+                }
+            }
+
+            if (showAddConditionDialog) {
+                AlertDialog(
+                    onDismissRequest = { showAddConditionDialog = false },
+                    title = { Text("New Condition") },
+                    text = {
+                        OutlinedTextField(
+                            value = newConditionName,
+                            onValueChange = { newConditionName = it },
+                            label = { Text("Condition name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            enabled = newConditionName.isNotBlank(),
+                            onClick = {
+                                val trimmedName = newConditionName.trim()
+                                coroutineScope.launch {
+                                    conditionId = viewModel.addCondition(Condition(name = trimmedName))
+                                    showAddConditionDialog = false
+                                }
+                            }
+                        ) { Text("Add") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showAddConditionDialog = false }) { Text("Cancel") }
+                    }
+                )
+            }
 
             AutocompleteTextField(
                 value = conditionNameField,
@@ -219,33 +312,51 @@ fun MedicationFormScreen(
 @Composable
 private fun DoctorDropdownField(
     doctors: List<Doctor>,
-    selectedName: String,
-    onNameChange: (String) -> Unit,
+    selectedDoctorId: Int?,
+    onSelect: (Int?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val filtered = doctors.filter { it.name.contains(selectedName, ignoreCase = true) }
+    // Same readOnly-field/interactionSource fix as the Condition dropdown
+    // above -- a plain .clickable on a readOnly OutlinedTextField gets
+    // swallowed by the field's own pointer input.
+    val interactionSource = remember { MutableInteractionSource() }
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collectLatest { interaction ->
+            if (interaction is PressInteraction.Release) {
+                expanded = true
+            }
+        }
+    }
+    val selectedName = doctors.firstOrNull { it.id == selectedDoctorId }?.name ?: "None"
 
     Box(modifier = modifier) {
         OutlinedTextField(
             value = selectedName,
-            onValueChange = {
-                onNameChange(it)
-                expanded = it.isNotBlank()
-            },
+            onValueChange = {},
+            readOnly = true,
             label = { Text("Prescribing doctor (optional)") },
+            trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null) },
+            interactionSource = interactionSource,
             modifier = Modifier.fillMaxWidth()
         )
         DropdownMenu(
-            expanded = expanded && filtered.isNotEmpty(),
+            expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier.fillMaxWidth()
         ) {
-            filtered.forEach { doctor ->
+            DropdownMenuItem(
+                text = { Text("None") },
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                }
+            )
+            doctors.forEach { doctor ->
                 DropdownMenuItem(
                     text = { Text(doctor.name) },
                     onClick = {
-                        onNameChange(doctor.name)
+                        onSelect(doctor.id)
                         expanded = false
                     }
                 )

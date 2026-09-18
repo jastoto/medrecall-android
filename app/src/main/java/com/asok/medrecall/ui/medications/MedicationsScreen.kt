@@ -47,20 +47,21 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.asok.medrecall.data.local.Medication
 import com.asok.medrecall.ui.components.MedRecallTopBar
+import com.asok.medrecall.ui.components.RaisedIconSurface
 import com.asok.medrecall.ui.components.SwipeToDeleteRow
 import kotlinx.coroutines.launch
 
-private val tileColors = listOf(
-    Color(0xFFE0435A), // red
-    Color(0xFF6C63E8), // indigo/purple
-    Color(0xFFFF9F43), // orange
-    Color(0xFF2BB3A3), // teal
-    Color(0xFF4CAF50), // green
-    Color(0xFFAB47BC)  // purple
+private val medicationTileGradients = listOf(
+    listOf(Color(0xFFE0435A), Color(0xFFB8293F)), // red
+    listOf(Color(0xFF6C63E8), Color(0xFF4A41C9)), // indigo/purple
+    listOf(Color(0xFFFF9F43), Color(0xFFE87F2E)), // orange
+    listOf(Color(0xFF2BB3A3), Color(0xFF1D8478)), // teal
+    listOf(Color(0xFF4CAF50), Color(0xFF388E3C)), // green
+    listOf(Color(0xFFAB47BC), Color(0xFF8E24AA))  // purple
 )
 
-private fun colorForMedication(medicationId: Int): Color =
-    tileColors[Math.floorMod(medicationId, tileColors.size)]
+private fun gradientForMedication(medicationId: Int): List<Color> =
+    medicationTileGradients[Math.floorMod(medicationId, medicationTileGradients.size)]
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,6 +122,7 @@ fun MedicationsScreen(
             }
         } else {
             val doctorsById = uiState.doctors.associateBy { it.id }
+            val conditionsById = uiState.conditions.associateBy { it.id }
             val grouped = visibleMedications
                 .sortedWith(compareByDescending<Medication> { it.active }.thenBy { it.name })
                 .groupBy { med -> med.prescribingDoctorId?.let { doctorsById[it] } }
@@ -136,6 +138,7 @@ fun MedicationsScreen(
                     DoctorMedicationGroup(
                         doctorName = doctor?.name ?: "No Doctor Assigned",
                         medications = meds,
+                        conditionsById = conditionsById,
                         onEditMedication = onEditMedication,
                         onDeleteMedication = ::deleteWithUndo
                     )
@@ -149,6 +152,7 @@ fun MedicationsScreen(
 private fun DoctorMedicationGroup(
     doctorName: String,
     medications: List<Medication>,
+    conditionsById: Map<Int, com.asok.medrecall.data.local.Condition>,
     onEditMedication: (Int) -> Unit,
     onDeleteMedication: (Medication) -> Unit
 ) {
@@ -171,6 +175,7 @@ private fun DoctorMedicationGroup(
                         onDelete = { onDeleteMedication(medication) }) {
                         MedicationRow(
                             medication = medication,
+                            conditionName = medication.conditionId?.let { conditionsById[it]?.name },
                             onClick = { onEditMedication(medication.id) }
                         )
                     }
@@ -184,7 +189,7 @@ private fun DoctorMedicationGroup(
 }
 
 @Composable
-private fun MedicationRow(medication: Medication, onClick: () -> Unit) {
+private fun MedicationRow(medication: Medication, conditionName: String?, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -192,14 +197,16 @@ private fun MedicationRow(medication: Medication, onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .background(colorForMedication(medication.id), RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.Medication, contentDescription = null, tint = Color.White)
-        }
+        RaisedIconSurface(
+            icon = Icons.Default.Medication,
+            contentDescription = null,
+            gradientColors = gradientForMedication(medication.id),
+            onClick = onClick,
+            tileSize = 44.dp,
+            iconSize = 20.dp,
+            cornerRadius = 14.dp,
+            elevation = 6.dp
+        )
         Column(
             modifier = Modifier
                 .padding(start = 12.dp)
@@ -210,7 +217,7 @@ private fun MedicationRow(medication: Medication, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurface,
                 textDecoration = if (medication.active) TextDecoration.None else TextDecoration.LineThrough
             )
-            val details = listOfNotNull(medication.dosage, medication.schedule).joinToString(" · ")
+            val details = listOfNotNull(medication.dosage, medication.schedule, conditionName?.let { "for $it" }).joinToString(" · ")
             if (details.isNotBlank()) {
                 Text(details, style = MaterialTheme.typography.bodyMedium)
             }

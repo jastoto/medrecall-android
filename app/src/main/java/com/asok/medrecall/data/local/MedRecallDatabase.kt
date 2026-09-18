@@ -40,6 +40,7 @@ abstract class MedRecallDatabase : RoomDatabase() {
                     // No migrations written yet — fine while we're still shaping the schema
                     // during early development. Revisit before this ships for real, since this
                     // wipes the local db on every version bump instead of preserving data.
+                    // v8 -> v9: added Condition.doctorId (punch item #5).
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                     .also { INSTANCE = it }

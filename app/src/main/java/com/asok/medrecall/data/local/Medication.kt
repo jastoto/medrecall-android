@@ -10,9 +10,9 @@ data class Medication(
     val dosage: String? = null,
     val schedule: String? = null,
     val prescribingDoctorId: Int? = null,
+    val conditionId: Int? = null,
     val startDate: Long? = null,
     val endDate: Long? = null,
     val active: Boolean = true,
-    val notes: String? = null,
-    val conditionId: Int? = null
+    val notes: String? = null
 )

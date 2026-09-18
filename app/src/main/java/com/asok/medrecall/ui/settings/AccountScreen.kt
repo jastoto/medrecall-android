@@ -1,28 +1,28 @@
 package com.asok.medrecall.ui.settings
 
+import android.app.Activity
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.LocalHospital
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,8 +33,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.asok.medrecall.data.calendar.GoogleCalendarInfo
-import com.asok.medrecall.ui.components.BackIconButton
 import com.asok.medrecall.ui.components.MedRecallTopBar
 
 private data class AccountLinkRow(val icon: ImageVector, val title: String, val comingSoonMessage: String)
@@ -44,32 +42,56 @@ private val healthSystemRows = listOf(
 )
 
 /**
- * Settings > Account. The Calendar section connects a Google account and
- * lets Asok pick which of his calendars MedRecall+ should push Appointments
- * to (see AccountViewModel / data/calendar/) -- replaces the old "Cloud
- * Storage Accounts" placeholder rows, since real Google Drive/OneDrive
- * sign-in now lives under Backup & Restore instead.
+ * Settings > Account. Two groups: cloud storage accounts and health system
+ * connections (Epic Sandbox).
+ *
+ * Google Drive and OneDrive are both real connectors here -- tapping Google
+ * Drive runs an actual Credential Manager sign-in followed by a Drive-scope
+ * authorization request (see AccountViewModel / GoogleAccountManager);
+ * tapping OneDrive runs MSAL's sign-in, which grants identity + Files
+ * access together in one step (see AccountViewModel / MicrosoftAccountManager).
+ * Epic Sandbox is still a UI shell -- tapping it explains what's coming
+ * rather than starting a real flow, since Epic App Orchard credentials
+ * haven't been set up.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AccountScreen(
-    onGoHome: () -> Unit,
-    onBack: () -> Unit,
-    viewModel: AccountViewModel = viewModel(factory = AccountViewModel.factory(LocalContext.current))
-) {
-    var dialogFor by remember { mutableStateOf<AccountLinkRow?>(null) }
-    val uiState by viewModel.uiState.collectAsState()
+fun AccountScreen(onGoHome: () -> Unit, onGoBack: () -> Unit) {
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val viewModel: AccountViewModel = viewModel(factory = AccountViewModel.factory(context))
 
-    val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result -> viewModel.onGoogleSignInResult(result.data) }
+    val googleAccount by viewModel.googleAccount.collectAsState()
+    val connectState by viewModel.connectState.collectAsState()
+    val pendingResolution by viewModel.pendingResolution.collectAsState()
+    val microsoftAccount by viewModel.microsoftAccount.collectAsState()
+    val microsoftConnectState by viewModel.microsoftConnectState.collectAsState()
+
+    var dialogFor by remember { mutableStateOf<AccountLinkRow?>(null) }
+    var showDisconnectConfirm by remember { mutableStateOf(false) }
+    var showDisconnectOneDriveConfirm by remember { mutableStateOf(false) }
+
+    val consentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        activity?.let { viewModel.onDriveConsentResult(it, result.resultCode, result.data) }
+    }
+
+    // When the ViewModel gets a "Play Services needs to show its own consent
+    // screen" outcome, launch it here -- ActivityResultLauncher can only be
+    // used from a composable, not from inside the ViewModel.
+    LaunchedEffect(pendingResolution) {
+        pendingResolution?.let { intentSender ->
+            consentLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
+        }
+    }
 
     Scaffold(
         topBar = {
             MedRecallTopBar(
                 title = "Account",
                 onGoHome = onGoHome,
-                actions = { BackIconButton(onClick = onBack) }
+                onGoBack = onGoBack
             )
         }
     ) { innerPadding ->
@@ -78,15 +100,45 @@ fun AccountScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            item { AccountSectionHeader("Calendar") }
+            item { AccountSectionHeader("Cloud Storage Accounts") }
             item {
-                CalendarSection(
-                    uiState = uiState,
-                    onSignIn = { googleSignInLauncher.launch(viewModel.googleSignInClient.signInIntent) },
-                    onSelectCalendar = { viewModel.selectCalendar(it) },
-                    onChangeCalendar = { viewModel.refreshCalendars() },
-                    onSignOut = { viewModel.signOut() }
-                )
+                SettingsGroup {
+                    if (connectState is GoogleConnectState.SigningIn || connectState is GoogleConnectState.RequestingDriveAccess) {
+                        GoogleDriveConnectingRow(connectState)
+                    } else if (googleAccount?.driveConnected == true) {
+                        SettingsRow(
+                            icon = Icons.Default.CloudQueue,
+                            title = "Google Drive",
+                            subtitle = "Connected as ${googleAccount?.displayName ?: googleAccount?.email}",
+                            onClick = { showDisconnectConfirm = true }
+                        )
+                    } else {
+                        SettingsRow(
+                            icon = Icons.Default.CloudQueue,
+                            title = "Google Drive",
+                            subtitle = "Not connected -- tap to sign in",
+                            onClick = { activity?.let { viewModel.connectGoogleDrive(it) } }
+                        )
+                    }
+                    SettingsDivider()
+                    if (microsoftConnectState is MicrosoftConnectState.SigningIn) {
+                        MicrosoftConnectingRow()
+                    } else if (microsoftAccount != null) {
+                        SettingsRow(
+                            icon = Icons.Default.CloudQueue,
+                            title = "OneDrive",
+                            subtitle = "Connected as ${microsoftAccount?.displayName ?: microsoftAccount?.email}",
+                            onClick = { showDisconnectOneDriveConfirm = true }
+                        )
+                    } else {
+                        SettingsRow(
+                            icon = Icons.Default.CloudQueue,
+                            title = "OneDrive",
+                            subtitle = "Not connected -- tap to sign in",
+                            onClick = { activity?.let { viewModel.connectOneDrive(it) } }
+                        )
+                    }
+                }
             }
 
             item { AccountSectionHeader("Health System Connections") }
@@ -109,83 +161,90 @@ fun AccountScreen(
     dialogFor?.let { row ->
         ComingSoonDialog(title = row.title, message = row.comingSoonMessage, onDismiss = { dialogFor = null })
     }
+
+    if (showDisconnectOneDriveConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDisconnectOneDriveConfirm = false },
+            title = { Text("Disconnect OneDrive?") },
+            text = { Text("MedRecall+ will no longer have access to your OneDrive. You can reconnect at any time.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.disconnectOneDrive(context)
+                    showDisconnectOneDriveConfirm = false
+                }) { Text("Disconnect") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisconnectOneDriveConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    val microsoftErrorState = microsoftConnectState
+    if (microsoftErrorState is MicrosoftConnectState.Error) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissMicrosoftError() },
+            title = { Text("OneDrive") },
+            text = { Text(microsoftErrorState.message) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissMicrosoftError() }) { Text("OK") }
+            }
+        )
+    }
+
+    if (showDisconnectConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDisconnectConfirm = false },
+            title = { Text("Disconnect Google Drive?") },
+            text = { Text("MedRecall+ will no longer have access to your Google Drive. You can reconnect at any time.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.disconnectGoogleDrive(context)
+                    showDisconnectConfirm = false
+                }) { Text("Disconnect") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisconnectConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    val errorState = connectState
+    if (errorState is GoogleConnectState.Error) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissError() },
+            title = { Text("Google Drive") },
+            text = { Text(errorState.message) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissError() }) { Text("OK") }
+            }
+        )
+    }
 }
 
 @Composable
-private fun CalendarSection(
-    uiState: AccountUiState,
-    onSignIn: () -> Unit,
-    onSelectCalendar: (GoogleCalendarInfo) -> Unit,
-    onChangeCalendar: () -> Unit,
-    onSignOut: () -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        when {
-            uiState.signedInLabel == null -> {
-                SettingsGroup {
-                    SettingsRow(
-                        icon = Icons.Default.CalendarMonth,
-                        title = "Sign in to Google Calendar",
-                        showChevron = false,
-                        onClick = onSignIn
-                    )
-                }
-            }
-            uiState.selectedCalendarId == null -> {
-                SettingsGroup {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
-                    ) {
-                        Text("Signed in as ${uiState.signedInLabel}. Choose a calendar to sync appointments to:")
-                    }
-                    SettingsDivider()
-                    uiState.availableCalendars.forEachIndexed { index, calendar ->
-                        SettingsRow(
-                            icon = Icons.Default.CalendarMonth,
-                            title = calendar.name,
-                            subtitle = if (calendar.isPrimary) "Primary" else null,
-                            showChevron = false,
-                            onClick = { onSelectCalendar(calendar) }
-                        )
-                        if (index != uiState.availableCalendars.lastIndex) SettingsDivider()
-                    }
-                }
-            }
-            else -> {
-                SettingsGroup {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)
-                    ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Column(modifier = Modifier.padding(start = 16.dp)) {
-                            Text("Syncing to ${uiState.selectedCalendarName}")
-                            Text(
-                                uiState.signedInLabel,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    SettingsDivider()
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                        TextButton(onClick = onChangeCalendar) { Text("Change Calendar") }
-                        TextButton(onClick = onSignOut) { Text("Sign Out") }
-                    }
-                }
-            }
-        }
+private fun GoogleDriveConnectingRow(state: GoogleConnectState) {
+    val label = when (state) {
+        is GoogleConnectState.SigningIn -> "Signing in..."
+        is GoogleConnectState.RequestingDriveAccess -> "Requesting Drive access..."
+        else -> "Working..."
+    }
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        Text(text = label, modifier = Modifier.padding(start = 16.dp), style = MaterialTheme.typography.bodyLarge)
+    }
+}
 
-        if (uiState.isBusy) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            }
-        }
-        uiState.statusMessage?.let { message ->
-            Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
-        }
-        uiState.errorMessage?.let { message ->
-            Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        }
+@Composable
+private fun MicrosoftConnectingRow() {
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        Text(text = "Signing in...", modifier = Modifier.padding(start = 16.dp), style = MaterialTheme.typography.bodyLarge)
     }
 }
 

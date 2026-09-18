@@ -1,9 +1,8 @@
 package com.asok.medrecall.ui.settings
 
 import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,13 +10,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Restore
@@ -25,6 +26,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,8 +37,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,57 +50,87 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.asok.medrecall.data.backup.BackupDestination
+import com.asok.medrecall.data.backup.BackupResult
 import com.asok.medrecall.data.backup.BackupSection
-import com.asok.medrecall.data.backup.CloudBackupFile
-import com.asok.medrecall.ui.components.BackIconButton
+import com.asok.medrecall.data.backup.DriveBackupFile
+import com.asok.medrecall.data.backup.OneDriveBackupFile
+import com.asok.medrecall.data.backup.OneDriveSectionBackups
+import com.asok.medrecall.data.backup.RestoreResult
+import com.asok.medrecall.data.backup.SectionBackups
 import com.asok.medrecall.ui.components.MedRecallTopBar
-import java.text.DateFormat
-import java.util.Date
 
-private fun Context.findActivity(): Activity? {
-    var context = this
-    while (context is ContextWrapper) {
-        if (context is Activity) return context
-        context = context.baseContext
-    }
-    return null
-}
-
-private fun BackupDestination.icon(): ImageVector = when (this) {
-    BackupDestination.GOOGLE_DRIVE -> Icons.Default.CloudQueue
-    BackupDestination.ONE_DRIVE -> Icons.Default.CloudQueue
-    BackupDestination.THIS_PHONE -> Icons.Default.PhoneAndroid
+private enum class BackupDestination(val icon: ImageVector, val label: String) {
+    GOOGLE_DRIVE(Icons.Default.CloudQueue, "Google Drive"),
+    ONE_DRIVE(Icons.Default.CloudQueue, "OneDrive"),
+    THIS_PHONE(Icons.Default.PhoneAndroid, "Files on This Phone")
 }
 
 /**
- * Settings > Backup & Restore. Google Drive and OneDrive are real
- * connectors now (sign in, pick which sections to include, back up,
- * and restore with a "this replaces everything currently in the app"
- * confirmation) -- see [BackupViewModel] and data/backup/. Files on
- * This Phone is still a UI shell pending its own punch-list item.
+ * Settings > Backup & Restore. Pick a destination, then Back Up or Restore.
+ *
+ * Google Drive is the one real destination. Back Up Now exports every
+ * section (Full) or just the ones checked (Individual -- mutually
+ * exclusive with Full, per Asok's spec) as separate JSON files under
+ * My Drive > MedRecall > Android Backup (see DriveBackupManager /
+ * BackupExporter). Restore re-authorizes, lists what's actually sitting in
+ * that Drive folder, and lets Asok pick a backup date per section in
+ * RestorePickerDialog below -- restoring a section REPLACES its current
+ * data in the app (see BackupImporter / DriveRestoreManager), per Asok's
+ * spec. OneDrive works the same way (see OneDriveBackupManager /
+ * OneDriveRestoreManager / OneDriveRestorePickerDialog below), just backed
+ * by MSAL + Microsoft Graph instead of Google's Credential Manager + Drive
+ * API. "Files on This Phone" is still a UI shell -- tapping it explains
+ * what's coming rather than doing anything real yet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BackupRestoreScreen(
-    onGoHome: () -> Unit,
-    onBack: () -> Unit,
-    viewModel: BackupViewModel = viewModel(factory = BackupViewModel.factory(LocalContext.current))
-) {
-    val uiState by viewModel.uiState.collectAsState()
+fun BackupRestoreScreen(onGoHome: () -> Unit, onGoBack: () -> Unit) {
     val context = LocalContext.current
-    var showBackupList by remember { mutableStateOf(false) }
+    val activity = context as? Activity
+    val viewModel: BackupViewModel = viewModel(factory = BackupViewModel.factory(context))
 
-    val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result -> viewModel.onGoogleSignInResult(result.data) }
+    var selected by remember { mutableStateOf(BackupDestination.THIS_PHONE) }
+    var dialogMessage by remember { mutableStateOf<String?>(null) }
+
+    val googleAccount by viewModel.googleAccount.collectAsState()
+    val microsoftAccount by viewModel.microsoftAccount.collectAsState()
+    val mode by viewModel.mode.collectAsState()
+    val selectedSections by viewModel.selectedSections.collectAsState()
+    val runState by viewModel.runState.collectAsState()
+    val pendingResolution by viewModel.pendingResolution.collectAsState()
+    val restoreState by viewModel.restoreState.collectAsState()
+    val restorePendingResolution by viewModel.restorePendingResolution.collectAsState()
+
+    val consentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        activity?.let { viewModel.onDriveConsentResult(it, result.resultCode, result.data) }
+    }
+
+    LaunchedEffect(pendingResolution) {
+        pendingResolution?.let { intentSender ->
+            consentLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
+        }
+    }
+
+    val restoreConsentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        activity?.let { viewModel.onRestoreDriveConsentResult(it, result.resultCode, result.data) }
+    }
+
+    LaunchedEffect(restorePendingResolution) {
+        restorePendingResolution?.let { intentSender ->
+            restoreConsentLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
+        }
+    }
 
     Scaffold(
         topBar = {
             MedRecallTopBar(
                 title = "Backup & Restore",
                 onGoHome = onGoHome,
-                actions = { BackIconButton(onClick = onBack) }
+                onGoBack = onGoBack
             )
         }
     ) { innerPadding ->
@@ -109,55 +144,16 @@ fun BackupRestoreScreen(
                     BackupDestination.entries.forEachIndexed { index, destination ->
                         DestinationRow(
                             destination = destination,
-                            selected = destination == uiState.selectedDestination,
-                            onSelect = {
-                                viewModel.selectDestination(destination)
-                                showBackupList = false
-                            }
+                            selected = destination == selected,
+                            onSelect = { selected = destination }
                         )
                         if (index != BackupDestination.entries.lastIndex) SettingsDivider()
                     }
                 }
             }
 
-            item {
-                when (uiState.selectedDestination) {
-                    BackupDestination.GOOGLE_DRIVE -> SignInRow(
-                        label = "Google Drive",
-                        signedInAs = uiState.googleSignedInLabel,
-                        onSignIn = { googleSignInLauncher.launch(viewModel.googleSignInClient.signInIntent) }
-                    )
-                    BackupDestination.ONE_DRIVE -> SignInRow(
-                        label = "OneDrive",
-                        signedInAs = uiState.oneDriveSignedInLabel,
-                        onSignIn = {
-                            context.findActivity()?.let { viewModel.signInToOneDrive(it) }
-                        }
-                    )
-                    BackupDestination.THIS_PHONE -> {}
-                }
-            }
-
-            item {
-                SettingsCaption("What to include")
-                SettingsGroup {
-                    BackupSection.entries.forEachIndexed { index, section ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.toggleSection(section) }
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = section in uiState.selectedSections,
-                                onCheckedChange = { viewModel.toggleSection(section) }
-                            )
-                            Text(section.label)
-                        }
-                        if (index != BackupSection.entries.lastIndex) SettingsDivider()
-                    }
-                }
+            if (selected == BackupDestination.GOOGLE_DRIVE || selected == BackupDestination.ONE_DRIVE) {
+                item { BackupScopeSection(mode, selectedSections, onModeChange = viewModel::setMode, onToggleSection = viewModel::toggleSection) }
             }
 
             item {
@@ -165,58 +161,72 @@ fun BackupRestoreScreen(
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    val isBackupBusy = runState is BackupRunState.AuthorizingDrive || runState is BackupRunState.Uploading
+                    val isRestoreBusy = restoreState is RestoreRunState.AuthorizingDrive ||
+                        restoreState is RestoreRunState.LoadingBackups ||
+                        restoreState is RestoreRunState.Restoring
+                    val isAnyBusy = isBackupBusy || isRestoreBusy
+
                     Button(
-                        onClick = { viewModel.backUpNow() },
-                        enabled = !uiState.isBusy,
+                        onClick = {
+                            when (selected) {
+                                BackupDestination.GOOGLE_DRIVE -> {
+                                    if (googleAccount?.driveConnected != true) {
+                                        dialogMessage = "Connect your Google account first in Settings > Account, then come back here to back up to Google Drive."
+                                    } else {
+                                        activity?.let { viewModel.backUpToGoogleDrive(it) }
+                                    }
+                                }
+                                BackupDestination.ONE_DRIVE -> {
+                                    if (microsoftAccount == null) {
+                                        dialogMessage = "Connect your Microsoft account first in Settings > Account, then come back here to back up to OneDrive."
+                                    } else {
+                                        activity?.let { viewModel.backUpToOneDrive(it) }
+                                    }
+                                }
+                                else -> dialogMessage = "Backing up to ${selected.label} is coming in a future update."
+                            }
+                        },
+                        enabled = !isAnyBusy,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Backup, contentDescription = null)
-                        Text(text = "  Back Up Now")
+                        if (isBackupBusy) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Text(text = "  Backing Up...")
+                        } else {
+                            Icon(Icons.Default.Backup, contentDescription = null)
+                            Text(text = "  Back Up Now")
+                        }
                     }
                     OutlinedButton(
                         onClick = {
-                            showBackupList = true
-                            viewModel.refreshBackupList()
+                            when (selected) {
+                                BackupDestination.GOOGLE_DRIVE -> {
+                                    if (googleAccount?.driveConnected != true) {
+                                        dialogMessage = "Connect your Google account first in Settings > Account, then come back here to restore from Google Drive."
+                                    } else {
+                                        activity?.let { viewModel.startGoogleDriveRestore(it) }
+                                    }
+                                }
+                                BackupDestination.ONE_DRIVE -> {
+                                    if (microsoftAccount == null) {
+                                        dialogMessage = "Connect your Microsoft account first in Settings > Account, then come back here to restore from OneDrive."
+                                    } else {
+                                        activity?.let { viewModel.startOneDriveRestore(it) }
+                                    }
+                                }
+                                else -> dialogMessage = "Restoring from ${selected.label} is coming in a future update."
+                            }
                         },
-                        enabled = !uiState.isBusy,
+                        enabled = !isAnyBusy,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Restore, contentDescription = null)
-                        Text(text = "  Restore")
-                    }
-                    if (uiState.isBusy) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                        }
-                    }
-                    uiState.statusMessage?.let { message ->
-                        Text(message, color = MaterialTheme.colorScheme.primary)
-                    }
-                    uiState.errorMessage?.let { message ->
-                        Text(message, color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-
-            if (showBackupList) {
-                item { SettingsCaption("Choose a backup to restore") }
-                if (uiState.availableBackups.isEmpty() && !uiState.isBusy) {
-                    item {
-                        Text(
-                            "No backups found in ${uiState.selectedDestination.label}.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                item {
-                    SettingsGroup {
-                        uiState.availableBackups.forEachIndexed { index, file ->
-                            BackupFileRow(file = file, onClick = { viewModel.requestRestore(file) })
-                            if (index != uiState.availableBackups.lastIndex) SettingsDivider()
+                        if (isRestoreBusy) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Text(text = "  Checking ${selected.label}...")
+                        } else {
+                            Icon(Icons.Default.Restore, contentDescription = null)
+                            Text(text = "  Restore")
                         }
                     }
                 }
@@ -224,24 +234,298 @@ fun BackupRestoreScreen(
         }
     }
 
-    uiState.pendingRestoreFile?.let { file ->
+    dialogMessage?.let { message ->
+        ComingSoonDialog(title = "Backup & Restore", message = message, onDismiss = { dialogMessage = null })
+    }
+
+    val currentRunState = runState
+    if (currentRunState is BackupRunState.Done) {
+        BackupResultDialog(results = currentRunState.results, destinationLabel = selected.label, onDismiss = { viewModel.dismissResult() })
+    }
+    if (currentRunState is BackupRunState.Error) {
         AlertDialog(
-            onDismissRequest = viewModel::cancelRestore,
-            title = { Text("Restore from ${uiState.selectedDestination.label}?") },
-            text = {
-                Text(
-                    "This replaces everything currently in MedRecall+ for the sections in " +
-                        "\"${file.name}\" with what's in that backup. This can't be undone."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = viewModel::confirmRestore) { Text("Replace Everything") }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::cancelRestore) { Text("Cancel") }
-            }
+            onDismissRequest = { viewModel.dismissResult() },
+            title = { Text("Backup & Restore") },
+            text = { Text(currentRunState.message) },
+            confirmButton = { TextButton(onClick = { viewModel.dismissResult() }) { Text("OK") } }
         )
     }
+
+    val currentRestoreState = restoreState
+    if (currentRestoreState is RestoreRunState.Picking) {
+        RestorePickerDialog(
+            sections = currentRestoreState.sections,
+            onConfirm = { chosen -> activity?.let { viewModel.confirmRestore(it, currentRestoreState.accessToken, chosen) } },
+            onDismiss = { viewModel.cancelRestorePicker() }
+        )
+    }
+    if (currentRestoreState is RestoreRunState.PickingOneDrive) {
+        OneDriveRestorePickerDialog(
+            sections = currentRestoreState.sections,
+            onConfirm = { chosen -> activity?.let { viewModel.confirmOneDriveRestore(it, currentRestoreState.accessToken, chosen) } },
+            onDismiss = { viewModel.cancelRestorePicker() }
+        )
+    }
+    if (currentRestoreState is RestoreRunState.Done) {
+        RestoreResultDialog(results = currentRestoreState.results, destinationLabel = selected.label, onDismiss = { viewModel.dismissRestoreResult() })
+    }
+    if (currentRestoreState is RestoreRunState.Error) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissRestoreResult() },
+            title = { Text("Backup & Restore") },
+            text = { Text(currentRestoreState.message) },
+            confirmButton = { TextButton(onClick = { viewModel.dismissRestoreResult() }) { Text("OK") } }
+        )
+    }
+}
+
+@Composable
+private fun BackupScopeSection(
+    mode: BackupMode,
+    selectedSections: Set<BackupSection>,
+    onModeChange: (BackupMode) -> Unit,
+    onToggleSection: (BackupSection) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(text = "Backup Scope", style = MaterialTheme.typography.labelLarge)
+        SettingsGroup {
+            ModeRow(
+                label = "Full Backup (every section)",
+                selected = mode == BackupMode.FULL,
+                onSelect = { onModeChange(BackupMode.FULL) }
+            )
+            SettingsDivider()
+            ModeRow(
+                label = "Individual Sections",
+                selected = mode == BackupMode.INDIVIDUAL,
+                onSelect = { onModeChange(BackupMode.INDIVIDUAL) }
+            )
+            if (mode == BackupMode.INDIVIDUAL) {
+                SettingsDivider()
+                Column(modifier = Modifier.padding(start = 32.dp, top = 4.dp, bottom = 8.dp)) {
+                    BackupSection.entries.forEach { section ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onToggleSection(section) }
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(checked = section in selectedSections, onCheckedChange = { onToggleSection(section) })
+                            Text(text = section.label)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModeRow(label: String, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onSelect)
+        Text(text = label, modifier = Modifier.padding(start = 8.dp))
+    }
+}
+
+@Composable
+private fun BackupResultDialog(results: List<BackupResult>, destinationLabel: String, onDismiss: () -> Unit) {
+    val successes = results.filterIsInstance<BackupResult.Success>()
+    val failures = results.filterIsInstance<BackupResult.Failure>()
+    val folderPath = if (destinationLabel == "OneDrive") "OneDrive > MedRecall > Android Backup" else "My Drive > MedRecall > Android Backup"
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Backup & Restore") },
+        text = {
+            Column {
+                if (successes.isNotEmpty()) {
+                    Text("Backed up to $destinationLabel ($folderPath):")
+                    successes.forEach { Text("• ${it.fileName}", style = MaterialTheme.typography.bodySmall) }
+                }
+                if (failures.isNotEmpty()) {
+                    if (successes.isNotEmpty()) Text(" ")
+                    Text("Failed:")
+                    failures.forEach { Text("• ${it.section.label}: ${it.message}", style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } }
+    )
+}
+
+@Composable
+private fun RestorePickerDialog(
+    sections: List<SectionBackups>,
+    onConfirm: (List<DriveBackupFile>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val selections = remember {
+        mutableStateMapOf<BackupSection, DriveBackupFile?>().apply {
+            sections.forEach { put(it.section, it.files.first()) }
+        }
+    }
+    var expandedSection by remember { mutableStateOf<BackupSection?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Restore from Google Drive") },
+        text = {
+            Column {
+                Text(
+                    text = "Choose which sections to restore and which backup date to use. Restoring a section REPLACES its current data in the app.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                sections.forEach { sectionBackups ->
+                    val selectedFile = selections[sectionBackups.section]
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = selectedFile != null,
+                            onCheckedChange = { checked ->
+                                selections[sectionBackups.section] = if (checked) sectionBackups.files.first() else null
+                            }
+                        )
+                        Text(text = sectionBackups.section.label, modifier = Modifier.weight(1f))
+                        Box {
+                            TextButton(
+                                onClick = { expandedSection = sectionBackups.section },
+                                enabled = selectedFile != null
+                            ) {
+                                Text(text = selectedFile?.dateLabel ?: sectionBackups.files.first().dateLabel)
+                            }
+                            DropdownMenu(
+                                expanded = expandedSection == sectionBackups.section,
+                                onDismissRequest = { expandedSection = null }
+                            ) {
+                                sectionBackups.files.forEach { file ->
+                                    DropdownMenuItem(
+                                        text = { Text(file.dateLabel) },
+                                        onClick = {
+                                            selections[sectionBackups.section] = file
+                                            expandedSection = null
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selections.values.filterNotNull()) }) { Text("Restore") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun RestoreResultDialog(results: List<RestoreResult>, destinationLabel: String, onDismiss: () -> Unit) {
+    val successes = results.filterIsInstance<RestoreResult.Success>()
+    val failures = results.filterIsInstance<RestoreResult.Failure>()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Backup & Restore") },
+        text = {
+            Column {
+                if (successes.isNotEmpty()) {
+                    Text("Restored from $destinationLabel:")
+                    successes.forEach { Text("• ${it.section.label} (${it.fileName})", style = MaterialTheme.typography.bodySmall) }
+                }
+                if (failures.isNotEmpty()) {
+                    if (successes.isNotEmpty()) Text(" ")
+                    Text("Failed:")
+                    failures.forEach { Text("• ${it.section.label}: ${it.message}", style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } }
+    )
+}
+
+@Composable
+private fun OneDriveRestorePickerDialog(
+    sections: List<OneDriveSectionBackups>,
+    onConfirm: (List<OneDriveBackupFile>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val selections = remember {
+        mutableStateMapOf<BackupSection, OneDriveBackupFile?>().apply {
+            sections.forEach { put(it.section, it.files.first()) }
+        }
+    }
+    var expandedSection by remember { mutableStateOf<BackupSection?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Restore from OneDrive") },
+        text = {
+            Column {
+                Text(
+                    text = "Choose which sections to restore and which backup date to use. Restoring a section REPLACES its current data in the app.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                sections.forEach { sectionBackups ->
+                    val selectedFile = selections[sectionBackups.section]
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = selectedFile != null,
+                            onCheckedChange = { checked ->
+                                selections[sectionBackups.section] = if (checked) sectionBackups.files.first() else null
+                            }
+                        )
+                        Text(text = sectionBackups.section.label, modifier = Modifier.weight(1f))
+                        Box {
+                            TextButton(
+                                onClick = { expandedSection = sectionBackups.section },
+                                enabled = selectedFile != null
+                            ) {
+                                Text(text = selectedFile?.dateLabel ?: sectionBackups.files.first().dateLabel)
+                            }
+                            DropdownMenu(
+                                expanded = expandedSection == sectionBackups.section,
+                                onDismissRequest = { expandedSection = null }
+                            ) {
+                                sectionBackups.files.forEach { file ->
+                                    DropdownMenuItem(
+                                        text = { Text(file.dateLabel) },
+                                        onClick = {
+                                            selections[sectionBackups.section] = file
+                                            expandedSection = null
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selections.values.filterNotNull()) }) { Text("Restore") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable
@@ -254,53 +538,7 @@ private fun DestinationRow(destination: BackupDestination, selected: Boolean, on
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(selected = selected, onClick = onSelect)
-        Icon(destination.icon(), contentDescription = null, modifier = Modifier.padding(start = 8.dp, end = 12.dp))
+        Icon(destination.icon, contentDescription = null, modifier = Modifier.padding(start = 8.dp, end = 12.dp))
         Text(text = destination.label)
     }
-}
-
-@Composable
-private fun SignInRow(label: String, signedInAs: String?, onSignIn: () -> Unit) {
-    SettingsGroup {
-        if (signedInAs != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Column(modifier = Modifier.padding(start = 16.dp)) {
-                    Text("Signed in to $label")
-                    Text(
-                        signedInAs,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        } else {
-            SettingsRow(
-                icon = Icons.Default.CloudQueue,
-                title = "Sign in to $label",
-                showChevron = false,
-                onClick = onSignIn
-            )
-        }
-    }
-}
-
-@Composable
-private fun BackupFileRow(file: CloudBackupFile, onClick: () -> Unit) {
-    val subtitle = buildString {
-        file.modifiedAtMillis?.let { append(DateFormat.getDateTimeInstance().format(Date(it))) }
-        file.sizeBytes?.let { bytes ->
-            if (isNotEmpty()) append(" · ")
-            append("${bytes / 1024} KB")
-        }
-    }
-    SettingsRow(
-        icon = Icons.Default.Restore,
-        title = file.name,
-        subtitle = subtitle.ifBlank { null },
-        onClick = onClick
-    )
 }

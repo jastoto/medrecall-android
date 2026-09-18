@@ -17,5 +17,10 @@ data class Appointment(
     // creating a duplicate, and deleting the appointment removes the
     // right event. Null means either Calendar isn't connected, or this
     // appointment hasn't synced yet.
-    val googleCalendarEventId: String? = null
+    val googleCalendarEventId: String? = null,
+    // Set when this appointment is synced via the on-device Calendar
+    // Provider (see data/calendar/DeviceCalendarManager.kt / the Settings >
+    // Calendar Sync picker). Kept alongside googleCalendarEventId for now;
+    // the two sync paths aren't unified yet (see calendar-two-way-sync-scope.md).
+    val deviceCalendarEventId: Long? = null
 )

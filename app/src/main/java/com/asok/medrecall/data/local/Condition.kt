@@ -16,6 +16,9 @@ import androidx.room.PrimaryKey
  *
  * doctorId: the doctor managing/associated with this condition, optional --
  * same free-form "pick or create" pattern as Medication.prescribingDoctorId.
+ *
+ * doctorId: the doctor who manages/prescribes for this condition (punch
+ * item #5) -- nullable since not every condition has one assigned yet.
  */
 @Entity(tableName = "conditions")
 data class Condition(

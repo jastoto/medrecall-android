@@ -1,166 +1,162 @@
 package com.asok.medrecall.ui.settings
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.asok.medrecall.data.calendar.GoogleCalendarInfo
-import com.asok.medrecall.data.calendar.GoogleCalendarService
-import com.asok.medrecall.data.calendar.GoogleCalendarSyncManager
-import com.asok.medrecall.data.local.MedRecallDatabase
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
-import com.google.android.gms.common.api.Scope
+import com.asok.medrecall.data.account.DriveAuthOutcome
+import com.asok.medrecall.data.account.GoogleAccountManager
+import com.asok.medrecall.data.account.MicrosoftAccountManager
+import com.asok.medrecall.data.account.MicrosoftAuthOutcome
+import com.asok.medrecall.data.settings.GoogleAccountSelection
+import com.asok.medrecall.data.settings.MicrosoftAccountSelection
+import com.asok.medrecall.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-data class AccountUiState(
-    val signedInLabel: String? = null,
-    val availableCalendars: List<GoogleCalendarInfo> = emptyList(),
-    val selectedCalendarId: String? = null,
-    val selectedCalendarName: String? = null,
-    val isBusy: Boolean = false,
-    val statusMessage: String? = null,
-    val errorMessage: String? = null
-)
+/** What the Google Drive row under Settings > Account is currently doing. */
+sealed class GoogleConnectState {
+    data object Idle : GoogleConnectState()
+    data object SigningIn : GoogleConnectState()
+    data object RequestingDriveAccess : GoogleConnectState()
+    data class Error(val message: String) : GoogleConnectState()
+}
+
+/** What the OneDrive row under Settings > Account is currently doing. */
+sealed class MicrosoftConnectState {
+    data object Idle : MicrosoftConnectState()
+    data object SigningIn : MicrosoftConnectState()
+    data class Error(val message: String) : MicrosoftConnectState()
+}
 
 /**
- * Drives Settings > Account's Calendar section: sign in to Google, pick
- * which of the signed-in account's calendars to sync Appointments to,
- * and switch/disconnect later. This is a separate Google sign-in from
- * Backup & Restore's Google Drive connector -- own scopes, own account
- * state (see GoogleCalendarService) -- even though the sign-in UI works
- * the same way for both.
- *
- * The first time a calendar is selected, every existing appointment is
- * pushed to it retroactively via [GoogleCalendarSyncManager.syncAllExisting];
- * from then on, [com.asok.medrecall.ui.appointments.AppointmentsViewModel]
- * keeps it in sync automatically as appointments are saved/deleted.
+ * Backs Settings > Account's "Google Drive" row: sign-in identity is
+ * persisted via [SettingsRepository]; the actual OAuth calls go through
+ * [GoogleAccountManager]. See that class's doc comment for the two-step
+ * sign-in-then-authorize flow and the RISK FLAG on this being unverified
+ * external-SDK code.
  */
-class AccountViewModel(
-    context: Context,
-    private val calendarService: GoogleCalendarService,
-    private val syncManager: GoogleCalendarSyncManager
-) : ViewModel() {
+class AccountViewModel(private val repository: SettingsRepository) : ViewModel() {
 
-    private val appContext = context.applicationContext
+    val googleAccount: StateFlow<GoogleAccountSelection?> = repository.googleAccount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    private val _uiState = MutableStateFlow(AccountUiState())
-    val uiState: StateFlow<AccountUiState> = _uiState.asStateFlow()
+    private val _connectState = MutableStateFlow<GoogleConnectState>(GoogleConnectState.Idle)
+    val connectState: StateFlow<GoogleConnectState> = _connectState
 
-    val googleSignInClient: GoogleSignInClient by lazy {
-        val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .requestScopes(
-                Scope(GoogleCalendarService.READONLY_SCOPE),
-                Scope(GoogleCalendarService.EVENTS_SCOPE)
-            )
-            .build()
-        GoogleSignIn.getClient(appContext, options)
-    }
+    val microsoftAccount: StateFlow<MicrosoftAccountSelection?> = repository.microsoftAccount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    init {
+    private val _microsoftConnectState = MutableStateFlow<MicrosoftConnectState>(MicrosoftConnectState.Idle)
+    val microsoftConnectState: StateFlow<MicrosoftConnectState> = _microsoftConnectState
+
+    /** Set by [requestDriveAuthorization] when Play Services needs its own consent screen; the screen (AccountScreen) launches this via an ActivityResultLauncher. */
+    private val _pendingResolution = MutableStateFlow<IntentSender?>(null)
+    val pendingResolution: StateFlow<IntentSender?> = _pendingResolution
+
+    /** Starts the full connect flow: sign in, then request Drive access. [activity] is required for both steps (Credential Manager UI, then Drive consent). */
+    fun connectGoogleDrive(activity: Activity) {
         viewModelScope.launch {
-            val signedInLabel = calendarService.signedInAccountLabel()
-            _uiState.update {
-                it.copy(
-                    signedInLabel = signedInLabel,
-                    selectedCalendarId = calendarService.selectedCalendarId(),
-                    selectedCalendarName = calendarService.selectedCalendarName()
-                )
-            }
-            if (signedInLabel != null && calendarService.selectedCalendarId() == null) {
-                refreshCalendars()
-            }
-        }
-    }
-
-    /** Called by the screen once GoogleSignInClient's own sign-in Activity result comes back. */
-    fun onGoogleSignInResult(data: Intent?) {
-        viewModelScope.launch {
+            _connectState.value = GoogleConnectState.SigningIn
             try {
-                val account = GoogleSignIn.getSignedInAccountFromIntent(data).getResult(ApiException::class.java)
-                val label = account.email ?: account.displayName ?: "Google account"
-                calendarService.onSignedIn(label)
-                _uiState.update { it.copy(signedInLabel = label, errorMessage = null) }
-                refreshCalendars()
-            } catch (e: ApiException) {
-                _uiState.update { it.copy(errorMessage = "Google sign-in failed: ${e.message ?: e.statusCode}") }
+                val signInInfo = GoogleAccountManager.signIn(activity)
+                if (signInInfo == null) {
+                    // User cancelled the account picker -- not an error, just stop.
+                    _connectState.value = GoogleConnectState.Idle
+                    return@launch
+                }
+                repository.setGoogleAccount(signInInfo.email, signInInfo.displayName)
+
+                _connectState.value = GoogleConnectState.RequestingDriveAccess
+                applyDriveOutcome(activity, GoogleAccountManager.requestDriveAuthorization(activity))
+            } catch (e: Exception) {
+                _connectState.value = GoogleConnectState.Error(e.message ?: "Google sign-in failed.")
             }
         }
     }
 
-    fun refreshCalendars() {
+    /** Called by AccountScreen's ActivityResultLauncher callback once the user responds to a launched consent screen. */
+    fun onDriveConsentResult(activity: Activity, resultCode: Int, data: Intent?) {
+        _pendingResolution.value = null
+        if (resultCode != Activity.RESULT_OK) {
+            _connectState.value = GoogleConnectState.Idle
+            return
+        }
         viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, errorMessage = null) }
-            calendarService.listCalendars()
-                .onSuccess { calendars ->
-                    _uiState.update { it.copy(isBusy = false, availableCalendars = calendars) }
-                }
-                .onFailure { e ->
-                    _uiState.update { it.copy(isBusy = false, errorMessage = "Couldn't load your calendars: ${e.message}") }
-                }
+            applyDriveOutcome(activity, GoogleAccountManager.handleAuthorizationResult(activity, data))
         }
     }
 
-    fun selectCalendar(calendar: GoogleCalendarInfo) {
-        val isFirstConnect = _uiState.value.selectedCalendarId == null
-        calendarService.selectCalendar(calendar)
-        _uiState.update {
-            it.copy(
-                selectedCalendarId = calendar.id,
-                selectedCalendarName = calendar.name,
-                statusMessage = null,
-                errorMessage = null
-            )
-        }
-        if (isFirstConnect) {
-            viewModelScope.launch {
-                _uiState.update { it.copy(isBusy = true) }
-                syncManager.syncAllExisting()
-                    .onSuccess { count ->
-                        _uiState.update {
-                            it.copy(isBusy = false, statusMessage = "Connected -- pushed $count existing appointment(s) to ${calendar.name}.")
-                        }
-                    }
-                    .onFailure { e ->
-                        _uiState.update { it.copy(isBusy = false, errorMessage = "Connected, but the initial sync failed: ${e.message}") }
-                    }
+    private suspend fun applyDriveOutcome(activity: Activity, outcome: DriveAuthOutcome) {
+        when (outcome) {
+            is DriveAuthOutcome.Authorized -> {
+                repository.setGoogleDriveConnected(true)
+                _connectState.value = GoogleConnectState.Idle
+            }
+            is DriveAuthOutcome.NeedsResolution -> {
+                _pendingResolution.value = outcome.intentSender
+                // connectState stays RequestingDriveAccess until the launcher result comes back.
+            }
+            is DriveAuthOutcome.Failed -> {
+                _connectState.value = GoogleConnectState.Error(outcome.message)
             }
         }
     }
 
-    fun signOut() {
+    /** Disconnects the Google account entirely (Settings > Account > Google Drive > Disconnect). */
+    fun disconnectGoogleDrive(context: Context) {
         viewModelScope.launch {
-            calendarService.signOut()
-            googleSignInClient.signOut()
-            _uiState.value = AccountUiState()
+            GoogleAccountManager.signOut(context)
+            repository.clearGoogleAccount()
         }
     }
 
-    fun dismissMessages() {
-        _uiState.update { it.copy(statusMessage = null, errorMessage = null) }
+    fun dismissError() {
+        _connectState.value = GoogleConnectState.Idle
+    }
+
+    /** Starts the OneDrive connect flow (Settings > Account > OneDrive). MSAL grants identity + Files.ReadWrite together, so unlike Google Drive there's no separate consent-screen hand-off needed here. */
+    fun connectOneDrive(activity: Activity) {
+        viewModelScope.launch {
+            _microsoftConnectState.value = MicrosoftConnectState.SigningIn
+            when (val outcome = MicrosoftAccountManager.getAccessToken(activity)) {
+                is MicrosoftAuthOutcome.Authorized -> {
+                    repository.setMicrosoftAccount(outcome.info.email, outcome.info.displayName)
+                    _microsoftConnectState.value = MicrosoftConnectState.Idle
+                }
+                is MicrosoftAuthOutcome.Cancelled -> {
+                    _microsoftConnectState.value = MicrosoftConnectState.Idle
+                }
+                is MicrosoftAuthOutcome.Failed -> {
+                    _microsoftConnectState.value = MicrosoftConnectState.Error(outcome.message)
+                }
+            }
+        }
+    }
+
+    /** Disconnects the Microsoft account entirely (Settings > Account > OneDrive > Disconnect). */
+    fun disconnectOneDrive(context: Context) {
+        viewModelScope.launch {
+            MicrosoftAccountManager.signOut(context)
+            repository.clearMicrosoftAccount()
+        }
+    }
+
+    fun dismissMicrosoftError() {
+        _microsoftConnectState.value = MicrosoftConnectState.Idle
     }
 
     companion object {
         fun factory(context: Context): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                val appContext = context.applicationContext
-                val db = MedRecallDatabase.getInstance(appContext)
-                val calendarService = GoogleCalendarService(appContext)
-                val syncManager = GoogleCalendarSyncManager(
-                    calendarService,
-                    db.appointmentDao(),
-                    db.doctorDao()
-                )
-                return AccountViewModel(context, calendarService, syncManager) as T
+                return AccountViewModel(SettingsRepository.getInstance(context)) as T
             }
         }
     }
