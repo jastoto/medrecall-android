@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.asok.medrecall.data.calendar.DeviceCalendarInfo
 import com.asok.medrecall.data.calendar.DeviceCalendarManager
+import com.asok.medrecall.data.calendar.CalendarSyncScheduler
 import com.asok.medrecall.data.local.MedRecallDatabase
 import com.asok.medrecall.data.repository.AppointmentRepository
 import com.asok.medrecall.data.settings.SettingsRepository
@@ -32,6 +33,9 @@ class SettingsViewModel(
 
     val syncCalendar: StateFlow<SyncCalendarSelection?> = repository.syncCalendar
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val calendarSyncIntervalMinutes: StateFlow<Long> = repository.calendarSyncIntervalMinutes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 15L)
 
     private val _availableCalendars = MutableStateFlow<List<DeviceCalendarInfo>>(emptyList())
     val availableCalendars: StateFlow<List<DeviceCalendarInfo>> = _availableCalendars
@@ -61,6 +65,17 @@ class SettingsViewModel(
         viewModelScope.launch {
             if (detachExisting) appointmentRepository.detachAllFromDeviceCalendar()
             repository.setSyncCalendar(calendar)
+        }
+    }
+
+    /**
+     * Changes how often the two-way Google Calendar reconciliation pass
+     * runs in the background (Settings > Calendar Sync > Sync Frequency).
+     */
+    fun setCalendarSyncInterval(context: Context, minutes: Long) {
+        viewModelScope.launch {
+            repository.setCalendarSyncIntervalMinutes(minutes)
+            CalendarSyncScheduler.schedulePeriodic(context, minutes)
         }
     }
 

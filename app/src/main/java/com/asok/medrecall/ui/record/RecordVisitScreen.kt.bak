@@ -1,0 +1,963 @@
+package com.asok.medrecall.ui.record
+
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.AudioManager
+import android.os.Build
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.EditCalendar
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.asok.medrecall.data.account.DriveAuthOutcome
+import com.asok.medrecall.data.account.GoogleAccountManager
+import com.asok.medrecall.data.account.MicrosoftAccountManager
+import com.asok.medrecall.data.account.MicrosoftAuthOutcome
+import com.asok.medrecall.data.local.Doctor
+import com.asok.medrecall.data.local.Note
+import com.asok.medrecall.data.recordings.DriveRecordingUploader
+import com.asok.medrecall.data.recordings.LocalRecordingStorage
+import com.asok.medrecall.data.recordings.OneDriveRecordingUploader
+import com.asok.medrecall.data.recordings.RecordingDestination
+import com.asok.medrecall.data.recordings.RecordingSaveResult
+import com.asok.medrecall.data.recordings.VisitNoteData
+import com.asok.medrecall.data.recordings.VisitNotePdfWriter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlin.coroutines.resume
+import com.asok.medrecall.ui.components.MedRecallTopBar
+
+/** Where the mic/ring visual + Stop Recording control are in, punch items #38/#39. */
+private enum class RecordingPhase { IDLE, RECORDING, PAUSED }
+
+/** One file to save alongside the visit -- the audio recording, and (per punch item #43) the structured PDF note. */
+private data class RecordingArtifact(val file: File, val fileName: String, val mimeType: String)
+
+/** Candidate streams the SpeechRecognizer start/stop beep might ride on -- OEM/Android-version dependent, so all are muted together for the duration of a recording session rather than guessing one. STREAM_ACCESSIBILITY added round 3 (2026-09-22) after MUSIC/NOTIFICATION/SYSTEM/RING alone didn't stop it on Asok's Samsung. */
+private val RECOGNIZER_BEEP_STREAMS = intArrayOf(
+    AudioManager.STREAM_MUSIC,
+    AudioManager.STREAM_NOTIFICATION,
+    AudioManager.STREAM_SYSTEM,
+    AudioManager.STREAM_RING,
+    AudioManager.STREAM_ACCESSIBILITY
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RecordVisitScreen(
+    onOpenCalendar: () -> Unit,
+    onScheduleAppointment: () -> Unit,
+    onOpenImport: () -> Unit,
+    onAddDoctor: () -> Unit,
+    onGoHome: () -> Unit,
+    viewModel: RecordVisitViewModel = viewModel(factory = RecordVisitViewModel.factory(LocalContext.current))
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager }
+
+    var doctorMenuExpanded by remember { mutableStateOf(false) }
+    val doctorFieldInteractionSource = remember { MutableInteractionSource() }
+    LaunchedEffect(doctorFieldInteractionSource) {
+        doctorFieldInteractionSource.interactions.collectLatest { interaction ->
+            if (interaction is PressInteraction.Release) {
+                doctorMenuExpanded = true
+            }
+        }
+    }
+    var selectedDoctor by remember { mutableStateOf<Doctor?>(null) }
+    var transcript by remember { mutableStateOf("") }
+    // Snapshot of `transcript` taken at the start of each SpeechRecognizer session --
+    // partial results are shown as "$baseTranscriptForSession $partial" without
+    // touching the committed value until onResults finalizes it. Punch item #36/#43
+    // follow-up: live-as-you-talk display, per Asok's answer.
+    var baseTranscriptForSession by remember { mutableStateOf("") }
+    var isListening by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
+    var justSaved by remember { mutableStateOf(false) }
+
+    // ---- Recording state (punch items #38/#39/#37/#43) -----------------------------
+    var phase by remember { mutableStateOf(RecordingPhase.IDLE) }
+    var pendingAudioFile by remember { mutableStateOf<File?>(null) }
+    var pendingNoteFile by remember { mutableStateOf<File?>(null) }
+    var pendingFileStamp by remember { mutableStateOf("") }
+    var pendingDoctorName by remember { mutableStateOf("") }
+    var pendingDateLabel by remember { mutableStateOf("") }
+    var pendingTimeLabel by remember { mutableStateOf("") }
+    var showVisitNoteDialog by remember { mutableStateOf(false) }
+    var noteSummary by remember { mutableStateOf("") }
+    var noteNextSteps by remember { mutableStateOf("") }
+    // Punch item #43 follow-up (2026-09-21): no more manual destination picker --
+    // saving now happens automatically to whichever cloud account(s) are already
+    // connected under Settings > Account (matching iOS's behavior), always plus a
+    // local copy. This dialog just shows progress/results, nothing to choose.
+    var showSaveStatusDialog by remember { mutableStateOf(false) }
+    var isSavingRecording by remember { mutableStateOf(false) }
+    var saveResults by remember { mutableStateOf<List<RecordingSaveResult>?>(null) }
+    // Holds the in-flight continuation while Google's own consent screen is up --
+    // resumed from driveAuthLauncher's callback below. Same NeedsResolution
+    // hand-off shape as AccountViewModel/BackupViewModel use for Drive sign-in.
+    var driveAuthContinuation by remember { mutableStateOf<((DriveAuthOutcome) -> Unit)?>(null) }
+
+    val recognizer = remember {
+        if (SpeechRecognizer.isRecognitionAvailable(context)) {
+            SpeechRecognizer.createSpeechRecognizer(context)
+        } else {
+            null
+        }
+    }
+
+    // Fix 2026-09-22, round 3: Asok confirmed the beep is STILL there after the
+    // round-2 fix (mute several candidate streams around every single
+    // startListening()/stopListening() call, unmuting 700ms later). Root cause of
+    // THAT fix not working: with the continuous auto-restart loop calling
+    // startListening() every few seconds, each call spun up its own 700ms
+    // unmute timer -- an older call's delayed unmute could land right as a NEWER
+    // call's beep was about to play, re-enabling volume in the gap between mute
+    // windows. Rebuilt as a single mute that's engaged ONCE when recording
+    // actually starts and held for the ENTIRE recording session (through every
+    // internal restart and every pause/resume) -- unmuted only once, when Asok
+    // fully stops (or cancels). No more per-call timing race. RISK FLAG: if the
+    // beep is STILL captured after this, it isn't a stream-mute-timing problem at
+    // all -- some Samsung audio stacks route this specific tone through a fixed,
+    // non-app-adjustable "assistant" volume, or it's genuine acoustic coupling
+    // (phone speaker picked back up by its own mic) that only stops if the
+    // recognizer's beep is prevented from playing at all, not just muted -- next
+    // step there would be muting via NotificationManager Do Not Disturb (needs a
+    // permission grant from Asok) rather than AudioManager stream volume.
+    var recordingSessionMuted by remember { mutableStateOf(false) }
+    fun muteForRecordingSession() {
+        if (recordingSessionMuted) return
+        recordingSessionMuted = true
+        for (stream in RECOGNIZER_BEEP_STREAMS) {
+            try {
+                audioManager?.adjustStreamVolume(stream, AudioManager.ADJUST_MUTE, 0)
+            } catch (e: Exception) { /* best-effort; some streams can't be muted on some devices */ }
+        }
+    }
+    fun unmuteAfterRecordingSession() {
+        if (!recordingSessionMuted) return
+        recordingSessionMuted = false
+        for (stream in RECOGNIZER_BEEP_STREAMS) {
+            try {
+                audioManager?.adjustStreamVolume(stream, AudioManager.ADJUST_UNMUTE, 0)
+            } catch (e: Exception) { /* best-effort */ }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            recognizer?.destroy()
+            // Safety net: if Asok navigates away mid-recording (back button, phone
+            // call, etc.) rather than tapping Stop Recording, don't leave his
+            // phone's media/notification/ring volume stuck muted.
+            unmuteAfterRecordingSession()
+        }
+    }
+
+    fun startListening() {
+        val speechRecognizer = recognizer
+        if (speechRecognizer == null) {
+            statusMessage = "Speech recognition isn't available on this device."
+            return
+        }
+        baseTranscriptForSession = transcript
+        speechRecognizer.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {
+                // Just a phase of one recognition pass ending -- onResults or onError
+                // always follows right after, so the real handling lives there.
+                isListening = false
+            }
+            override fun onError(error: Int) {
+                isListening = false
+                // ERROR_NO_MATCH / ERROR_SPEECH_TIMEOUT just mean "didn't catch any
+                // words that round" -- completely normal during an ordinary
+                // conversational pause (someone listening to the doctor, a silence
+                // between sentences), NOT a reason to pause the whole recording.
+                // Fixed 2026-09-21 after Asok found it was auto-pausing on every
+                // silence gap: these two codes now just restart listening silently,
+                // same as a fresh utterance finishing normally (see onResults) --
+                // MediaRecorder keeps running the whole time regardless. Any OTHER
+                // error code (network, audio hardware, permissions, server) is a
+                // real problem worth surfacing, so those still pause and tell Asok.
+                if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                    if (phase == RecordingPhase.RECORDING) {
+                        startListening()
+                    }
+                } else {
+                    if (phase == RecordingPhase.RECORDING) {
+                        viewModel.pauseAudioRecording()
+                        phase = RecordingPhase.PAUSED
+                    }
+                    statusMessage = "Didn't catch that — tap the mic to resume."
+                }
+            }
+            override fun onResults(results: Bundle?) {
+                isListening = false
+                val heard = results
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()
+                transcript = when {
+                    heard.isNullOrBlank() -> baseTranscriptForSession
+                    baseTranscriptForSession.isBlank() -> heard
+                    else -> "$baseTranscriptForSession $heard"
+                }
+                // Android's speech-recognition intent only captures ONE utterance per
+                // startListening() call -- to keep transcribing continuously through
+                // the whole visit (not just one sentence at a time), immediately start
+                // the next recognition pass as long as Asok hasn't tapped pause/stop.
+                if (phase == RecordingPhase.RECORDING) {
+                    startListening()
+                }
+            }
+            override fun onPartialResults(partialResults: Bundle?) {
+                val partial = partialResults
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()
+                if (!partial.isNullOrBlank()) {
+                    transcript = if (baseTranscriptForSession.isBlank()) partial else "$baseTranscriptForSession $partial"
+                }
+            }
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            // Fix 2026-09-22 (Asok: "not transcribing everything being said"): each
+            // restart of the recognizer has a real gap -- a few hundred ms while the
+            // old session tears down and the new one spins up -- during which
+            // anything spoken is lost. These three extras push Android to end each
+            // session on a LONGER silence gap and hold it open for a MINIMUM amount
+            // of time, so normal conversational pauses (a sentence break, someone
+            // listening to the doctor) don't trigger a restart at all -- fewer
+            // restarts means fewer gaps means less dropped speech. This can't
+            // eliminate the gap entirely (ACTION_RECOGNIZE_SPEECH is fundamentally a
+            // one-utterance-at-a-time API, not true continuous dictation), but it
+            // should substantially cut down how often it happens during an ordinary
+            // conversation. RISK FLAG: if words are still getting dropped after this,
+            // the real fix is a different transcription approach entirely (a
+            // continuous/streaming on-device recognizer), which is a bigger change.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 15000L)
+        }
+        statusMessage = null
+        isListening = true
+        speechRecognizer.startListening(intent)
+    }
+
+    fun beginRecording() {
+        val started = viewModel.startAudioRecording()
+        if (!started) {
+            statusMessage = "Couldn't start the microphone recording — try again."
+            return
+        }
+        muteForRecordingSession()
+        phase = RecordingPhase.RECORDING
+        startListening()
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            beginRecording()
+        } else {
+            statusMessage = "Microphone permission is needed to record a visit."
+        }
+    }
+
+    // Only needed on API 26-28 for LocalRecordingStorage's legacy file path --
+    // API 29+ writes its own MediaStore entry without this permission.
+    // retrySaveTrigger + the LaunchedEffect below re-run the auto-save once
+    // permission is granted (saveRecordingAndNote is declared further down, so
+    // this can't call it directly without a forward reference).
+    var retrySaveTrigger by remember { mutableStateOf(0) }
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            retrySaveTrigger++
+        } else {
+            statusMessage = "Storage permission is needed to save to this phone."
+        }
+    }
+
+    val driveAuthLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val activity = context.findActivity()
+        val outcome = if (activity != null) {
+            GoogleAccountManager.handleAuthorizationResult(activity, result.data)
+        } else {
+            DriveAuthOutcome.Failed("Could not complete Google Drive authorization.")
+        }
+        driveAuthContinuation?.invoke(outcome)
+        driveAuthContinuation = null
+    }
+
+    suspend fun getGoogleDriveToken(activity: Activity): String? {
+        return when (val outcome = GoogleAccountManager.requestDriveAuthorization(activity)) {
+            is DriveAuthOutcome.Authorized -> outcome.accessToken
+            is DriveAuthOutcome.NeedsResolution -> {
+                val resolved = suspendCancellableCoroutine<DriveAuthOutcome> { cont ->
+                    driveAuthContinuation = { cont.resume(it) }
+                    driveAuthLauncher.launch(IntentSenderRequest.Builder(outcome.intentSender).build())
+                }
+                (resolved as? DriveAuthOutcome.Authorized)?.accessToken
+            }
+            is DriveAuthOutcome.Failed -> null
+        }
+    }
+
+    suspend fun getMicrosoftToken(activity: Activity): String? {
+        val outcome = MicrosoftAccountManager.getAccessToken(activity)
+        return (outcome as? MicrosoftAuthOutcome.Authorized)?.info?.accessToken
+    }
+
+    fun onMicTapped() {
+        when (phase) {
+            RecordingPhase.IDLE -> {
+                if (selectedDoctor == null) {
+                    statusMessage = "Choose a Doctor to begin."
+                    return
+                }
+                val hasPermission = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+                if (hasPermission) {
+                    beginRecording()
+                } else {
+                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            }
+            RecordingPhase.RECORDING -> {
+                // Deliberately NOT unmuting here -- the session-wide mute (see
+                // muteForRecordingSession/unmuteAfterRecordingSession above) stays
+                // engaged straight through a pause/resume cycle, since pausing
+                // still triggers its own stopListening() beep. Only a full Stop
+                // Recording restores normal volume.
+                recognizer?.stopListening()
+                isListening = false
+                viewModel.pauseAudioRecording()
+                phase = RecordingPhase.PAUSED
+            }
+            RecordingPhase.PAUSED -> {
+                viewModel.resumeAudioRecording()
+                phase = RecordingPhase.RECORDING
+                startListening()
+            }
+        }
+    }
+
+    fun onStopRecordingTapped() {
+        recognizer?.stopListening()
+        isListening = false
+        val file = viewModel.stopAudioRecording()
+        phase = RecordingPhase.IDLE
+        // Recording session (and its beep-suppressing mute) is fully over now --
+        // restore normal stream volumes. A short delay lets stopListening()'s own
+        // beep, if any, still land while muted before we unmute.
+        coroutineScope.launch {
+            delay(700)
+            unmuteAfterRecordingSession()
+        }
+        if (file != null) {
+            // Punch-list follow-up (2026-09-22, Asok): whatever statusMessage was
+            // showing before Stop was tapped -- most commonly the auto-pause
+            // "Didn't catch that" text from onError above -- was going stale and
+            // sitting under the now-red idle mic all the way through the
+            // save-decision dialog, which read as if something had gone wrong.
+            // Overwrite it here with a plain confirmation; resetForNextRecording()
+            // (called once the save dialog is actually resolved, below) clears it
+            // back to the normal "Choose a Doctor to begin" idle prompt.
+            statusMessage = "Recording has finished."
+            pendingAudioFile = file
+            pendingNoteFile = null
+            val now = LocalDateTime.now()
+            pendingFileStamp = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HHmm"))
+            pendingDoctorName = selectedDoctor?.name ?: "Unknown Doctor"
+            pendingDateLabel = now.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
+            pendingTimeLabel = now.format(DateTimeFormatter.ofPattern("h:mm a"))
+            noteSummary = ""
+            noteNextSteps = ""
+            saveResults = null
+            showVisitNoteDialog = true
+        } else {
+            statusMessage = "The recording couldn't be saved — try again."
+        }
+    }
+
+    /**
+     * Punch-list follow-up (2026-09-22, Asok): once the visit-note dialog is
+     * resolved (Continue, Skip Note, or Cancel), the screen is ready for the
+     * next recording -- clears the "Recording has finished." confirmation, the
+     * selected doctor, and the transcript so the idle prompt reads
+     * "Choose a Doctor to begin" again rather than leaving the previous
+     * doctor/transcript sitting on screen.
+     */
+    fun resetForNextRecording() {
+        selectedDoctor = null
+        transcript = ""
+        statusMessage = null
+    }
+
+    /**
+     * Punch item #43 follow-up (2026-09-21): auto-saves the recording (and note,
+     * if not skipped) to a local copy plus whichever cloud account(s) are already
+     * connected under Settings > Account -- no destination picker, matching how
+     * Asok says iOS already backs up. Re-entrant: the storage-permission retry
+     * path and the two visit-note-dialog exits (Continue/Skip) both call this
+     * same function once pendingAudioFile/pendingNoteFile are set.
+     */
+    fun saveRecordingAndNote() {
+        // Guards against a second, overlapping call before the first finishes --
+        // root cause of Asok's "two files with the same name" report (2026-09-21):
+        // pendingAudioFile isn't cleared until the save coroutine below completes,
+        // so a double-tap on Skip Note (or any other double-trigger) could start a
+        // second concurrent save of the SAME file, and MediaStore/Drive/OneDrive
+        // each handle a same-name collision by renaming/duplicating rather than
+        // erroring, which is exactly what showed up.
+        if (isSavingRecording) return
+        val audioFile = pendingAudioFile ?: return
+        val noteFile = pendingNoteFile
+        val destinations = buildSet {
+            add(RecordingDestination.LOCAL)
+            if (uiState.googleDriveConnected) add(RecordingDestination.GOOGLE_DRIVE)
+            if (uiState.oneDriveConnected) add(RecordingDestination.ONE_DRIVE)
+        }
+        val activity = context.findActivity()
+        if (activity == null) {
+            saveResults = destinations.map { RecordingSaveResult.Failure(it, "Couldn't access the app screen — try again.") }
+            showSaveStatusDialog = true
+            return
+        }
+        val artifacts = buildList {
+            add(RecordingArtifact(audioFile, "Visit_$pendingFileStamp.m4a", "audio/mp4"))
+            if (noteFile != null) add(RecordingArtifact(noteFile, "VisitNote_$pendingFileStamp.pdf", "application/pdf"))
+        }
+        val doctorFolderName = pendingDoctorName
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
+        }
+
+        isSavingRecording = true
+        saveResults = null
+        showSaveStatusDialog = true
+        coroutineScope.launch {
+            val results = mutableListOf<RecordingSaveResult>()
+            for (destination in destinations) {
+                val result = try {
+                    val locations = mutableListOf<String>()
+                    when (destination) {
+                        RecordingDestination.LOCAL -> {
+                            for (artifact in artifacts) {
+                                locations += withContext(Dispatchers.IO) {
+                                    LocalRecordingStorage.save(context, artifact.file, doctorFolderName, artifact.fileName, artifact.mimeType)
+                                }
+                            }
+                        }
+                        RecordingDestination.GOOGLE_DRIVE -> {
+                            val token = getGoogleDriveToken(activity)
+                                ?: throw IllegalStateException("Couldn't connect to Google Drive.")
+                            for (artifact in artifacts) {
+                                locations += withContext(Dispatchers.IO) {
+                                    DriveRecordingUploader.upload(token, doctorFolderName, artifact.fileName, artifact.file, artifact.mimeType)
+                                }
+                            }
+                        }
+                        RecordingDestination.ONE_DRIVE -> {
+                            val token = getMicrosoftToken(activity)
+                                ?: throw IllegalStateException("Couldn't connect to OneDrive.")
+                            for (artifact in artifacts) {
+                                locations += withContext(Dispatchers.IO) {
+                                    OneDriveRecordingUploader.upload(token, doctorFolderName, artifact.fileName, artifact.file, artifact.mimeType)
+                                }
+                            }
+                        }
+                    }
+                    RecordingSaveResult.Success(destination, locations.joinToString(" · "))
+                } catch (e: Exception) {
+                    RecordingSaveResult.Failure(destination, e.message ?: "Something went wrong.")
+                }
+                results.add(result)
+            }
+            isSavingRecording = false
+            saveResults = results
+            viewModel.discardTempFile(audioFile)
+            viewModel.discardTempFile(noteFile)
+            pendingAudioFile = null
+            pendingNoteFile = null
+        }
+    }
+
+    fun onVisitNoteConfirmed() {
+        val patientName = uiState.patientName ?: "Patient"
+        val note = VisitNoteData(
+            patientName = patientName,
+            doctorName = pendingDoctorName,
+            dateLabel = pendingDateLabel,
+            timeLabel = pendingTimeLabel,
+            summary = noteSummary.trim(),
+            callLog = transcript.trim(),
+            nextSteps = noteNextSteps.trim()
+        )
+        pendingNoteFile = VisitNotePdfWriter.write(context, note, pendingFileStamp)
+        showVisitNoteDialog = false
+        saveRecordingAndNote()
+        resetForNextRecording()
+    }
+
+    fun onSkipVisitNote() {
+        pendingNoteFile = null
+        showVisitNoteDialog = false
+        saveRecordingAndNote()
+        resetForNextRecording()
+    }
+
+    fun onCancelVisitNote() {
+        showVisitNoteDialog = false
+        viewModel.discardTempFile(pendingAudioFile)
+        pendingAudioFile = null
+        resetForNextRecording()
+    }
+
+    LaunchedEffect(retrySaveTrigger) {
+        if (retrySaveTrigger > 0) {
+            saveRecordingAndNote()
+        }
+    }
+
+    LaunchedEffect(justSaved) {
+        if (justSaved) {
+            delay(2000)
+            justSaved = false
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            MedRecallTopBar(
+                title = "Record Visit",
+                onGoHome = onGoHome
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(16.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.weight(1f)) {
+                    OutlinedTextField(
+                        value = selectedDoctor?.name ?: "",
+                        onValueChange = {},
+                        readOnly = true,
+                        placeholder = { Text("Choose a doctor...") },
+                        trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null) },
+                        interactionSource = doctorFieldInteractionSource,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    DropdownMenu(
+                        expanded = doctorMenuExpanded && uiState.doctors.isNotEmpty(),
+                        onDismissRequest = { doctorMenuExpanded = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        uiState.doctors.forEach { doctor ->
+                            DropdownMenuItem(
+                                text = { Text(doctor.name) },
+                                onClick = {
+                                    selectedDoctor = doctor
+                                    doctorMenuExpanded = false
+                                    statusMessage = null
+                                }
+                            )
+                        }
+                    }
+                }
+                FilledIconButton(
+                    onClick = onAddDoctor,
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add doctor")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                RecordVisitTile(
+                    label = "Calendar",
+                    icon = Icons.Default.CalendarMonth,
+                    background = Color(0xFFE3E3E8),
+                    contentColor = Color(0xFF3A3A3C),
+                    onClick = onOpenCalendar,
+                    modifier = Modifier.weight(1f)
+                )
+                RecordVisitTile(
+                    label = "Schedule",
+                    icon = Icons.Default.EditCalendar,
+                    background = Color(0xFFFCE8A8),
+                    contentColor = Color(0xFF8A6100),
+                    onClick = onScheduleAppointment,
+                    modifier = Modifier.weight(1f)
+                )
+                RecordVisitTile(
+                    label = "Import",
+                    icon = Icons.Default.Download,
+                    background = Color(0xFFAEDED6),
+                    contentColor = Color(0xFF0F5B4D),
+                    onClick = onOpenImport,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(40.dp))
+
+            val (outerColor, innerColor) = when (phase) {
+                RecordingPhase.IDLE -> Color(0xFFFBDCDC) to Color(0xFFE0435A)
+                RecordingPhase.RECORDING -> Color(0xFFDCEFE3) to Color(0xFF2E8B57)
+                RecordingPhase.PAUSED -> Color(0xFFFCE8A8) to Color(0xFFC79100)
+            }
+
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(180.dp)
+                        .background(outerColor, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .background(innerColor, CircleShape)
+                            .clickable { onMicTapped() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Mic,
+                            contentDescription = when (phase) {
+                                RecordingPhase.IDLE -> "Start recording"
+                                RecordingPhase.RECORDING -> "Pause recording"
+                                RecordingPhase.PAUSED -> "Resume recording"
+                            },
+                            tint = Color.White,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
+                }
+            }
+
+            if (phase == RecordingPhase.PAUSED) {
+                TextButton(
+                    onClick = { onStopRecordingTapped() },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Stop Recording", color = MaterialTheme.colorScheme.error)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Punch-list follow-up (2026-09-22, Asok): all status text under the mic
+            // (idle prompt, paused/listening/finished/error states) bumped up a size
+            // and to medium weight so it reads more clearly at a glance.
+            val micStatusTextStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium)
+
+            when {
+                justSaved -> Text(
+                    "Visit note saved.",
+                    textAlign = TextAlign.Center,
+                    style = micStatusTextStyle,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                statusMessage != null -> Text(
+                    statusMessage.orEmpty(),
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.error,
+                    style = micStatusTextStyle,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                phase == RecordingPhase.PAUSED -> Text(
+                    "Paused — tap the mic to resume, or Stop Recording when you're done.",
+                    textAlign = TextAlign.Center,
+                    style = micStatusTextStyle,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                phase == RecordingPhase.RECORDING -> Text(
+                    "Listening…",
+                    textAlign = TextAlign.Center,
+                    style = micStatusTextStyle,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                transcript.isBlank() && selectedDoctor == null -> Text(
+                    "Choose a Doctor to begin",
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = micStatusTextStyle,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                transcript.isBlank() -> Text(
+                    "Tap the mic to start recording",
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = micStatusTextStyle,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (transcript.isNotBlank()) {
+                OutlinedTextField(
+                    value = transcript,
+                    onValueChange = { transcript = it },
+                    // Read-only while actively listening -- partial results overwrite this
+                    // field every callback, so manual edits during that window would just
+                    // get clobbered. Editable again the moment you pause or stop.
+                    readOnly = phase == RecordingPhase.RECORDING,
+                    label = { Text("Visit notes") },
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    minLines = 5
+                )
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                    Button(
+                        onClick = {
+                            val doctor = selectedDoctor
+                            if (doctor != null) {
+                                coroutineScope.launch {
+                                    val dateLabel = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
+                                    viewModel.saveNote(
+                                        Note(
+                                            title = "Visit with ${doctor.name} – $dateLabel",
+                                            body = transcript.trim(),
+                                            createdAt = System.currentTimeMillis(),
+                                            doctorId = doctor.id
+                                        )
+                                    )
+                                    transcript = ""
+                                    justSaved = true
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = selectedDoctor != null && transcript.isNotBlank()
+                    ) {
+                        Text("Save")
+                    }
+                    TextButton(
+                        onClick = { transcript = "" },
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Text("Clear")
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- Visit note dialog (punch item #43) --------------------------------------
+    // Shown right after Stop Recording, before the destination picker. Summary and
+    // Next Steps are typed by Asok here -- not AI-generated, that's a separate,
+    // tabled punch item. Call Log is just the transcript captured above.
+    if (showVisitNoteDialog) {
+        AlertDialog(
+            onDismissRequest = { onCancelVisitNote() },
+            title = { Text("Finish visit note") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text("Patient: ${uiState.patientName ?: "—"}", modifier = Modifier.padding(bottom = 2.dp))
+                    Text("Doctor: $pendingDoctorName", modifier = Modifier.padding(bottom = 2.dp))
+                    Text("$pendingDateLabel at $pendingTimeLabel", modifier = Modifier.padding(bottom = 12.dp))
+                    OutlinedTextField(
+                        value = noteSummary,
+                        onValueChange = { noteSummary = it },
+                        label = { Text("Summary") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3
+                    )
+                    OutlinedTextField(
+                        value = noteNextSteps,
+                        onValueChange = { noteNextSteps = it },
+                        label = { Text("Next Steps") },
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        minLines = 3
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { onVisitNoteConfirmed() }) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { onSkipVisitNote() }) {
+                        Text("Skip Note")
+                    }
+                    TextButton(onClick = { onCancelVisitNote() }) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        )
+    }
+
+    // Punch item #43 follow-up (2026-09-21): purely informational now -- no
+    // checkboxes, since saveRecordingAndNote() already decided the destinations
+    // automatically from Settings > Account. Just shows progress, then results.
+    if (showSaveStatusDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!isSavingRecording) showSaveStatusDialog = false },
+            title = { Text(if (isSavingRecording) "Saving…" else "Saved") },
+            text = {
+                Column {
+                    if (isSavingRecording) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            Text("Saving to this phone and any connected accounts…", modifier = Modifier.padding(start = 8.dp))
+                        }
+                    } else {
+                        saveResults.orEmpty().forEach { result ->
+                            when (result) {
+                                is RecordingSaveResult.Success -> Text("✓ ${result.destination.label}: ${result.locationLabel}")
+                                is RecordingSaveResult.Failure -> Text(
+                                    "✗ ${result.destination.label}: ${result.message}",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (!isSavingRecording) {
+                    TextButton(onClick = { showSaveStatusDialog = false }) {
+                        Text("Done")
+                    }
+                }
+            }
+        )
+    }
+}
+
+/** Walks up the ContextWrapper chain Compose sometimes hands back to find the real Activity -- needed because GoogleAccountManager.requestDriveAuthorization/MicrosoftAccountManager.getAccessToken both require an Activity, not just a Context, since either may need to show a consent screen. */
+private fun Context.findActivity(): Activity? {
+    var ctx = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
+
+@Composable
+private fun RecordVisitTile(
+    label: String,
+    icon: ImageVector,
+    background: Color,
+    contentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = background)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(icon, contentDescription = null, tint = contentColor)
+            Text(label, color = contentColor, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}

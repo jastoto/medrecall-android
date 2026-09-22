@@ -46,6 +46,12 @@ interface AppointmentDao {
     @Query("UPDATE appointments SET deviceCalendarEventId = NULL")
     suspend fun clearAllDeviceCalendarEventIds()
 
+    // Backs the one-time "removed from Google Calendar -- remove here too?"
+    // confirmation on the Appointments screen (see GoogleCalendarSyncManager.
+    // reconcileFromGoogle and calendar-two-way-sync-scope.md §5.1).
+    @Query("SELECT * FROM appointments WHERE pendingGoogleDeletion = 1")
+    fun observePendingGoogleDeletions(): Flow<List<Appointment>>
+
     /** Bulk-inserts, replacing on id conflict -- used by BackupImporter after deleteAll() to reload a section from a Drive backup with its original ids intact. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllForRestore(items: List<Appointment>)

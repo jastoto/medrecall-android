@@ -4,6 +4,12 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Record Visit: saving a finished recording to this phone's Downloads
+         folder (punch items #37/#39, see data/recordings/LocalRecordingStorage.kt).
+         Only needed on API 26-28 for the legacy File-based path; API 29+ writes
+         its own MediaStore entry without this permission, hence maxSdkVersion. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
     <!-- Backup & Restore: Google Drive / OneDrive connectors talk to the
          network over plain REST calls (see data/backup/). -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -58,6 +64,7 @@
         android:theme="@style/Theme.MedRecall">
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.MedRecall"

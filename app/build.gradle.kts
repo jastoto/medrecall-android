@@ -1,8 +1,20 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
+    id("com.google.gms.google-services")
+    id("com.google.firebase.appdistribution")
+}
+
+val releaseSigningProps = Properties().apply {
+    val localPropsFile = rootProject.file("local.properties")
+    if (localPropsFile.exists()) {
+        load(FileInputStream(localPropsFile))
+    }
 }
 
 android {
@@ -15,14 +27,27 @@ android {
         applicationId = "com.asok.medrecall"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 8
+        versionName = "2.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val storeFileName = releaseSigningProps.getProperty("RELEASE_STORE_FILE")
+            if (storeFileName != null) {
+                storeFile = file("$storeFileName")
+                storePassword = releaseSigningProps.getProperty("RELEASE_STORE_PASSWORD")
+                keyAlias = releaseSigningProps.getProperty("RELEASE_KEY_ALIAS")
+                keyPassword = releaseSigningProps.getProperty("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             optimization {
                 enable = false
             }
@@ -42,6 +67,23 @@ kotlin {
     jvmToolchain(11)
 }
 
+firebaseAppDistribution {
+    releaseNotes = "Beta build"
+    groups = "beta-testers"
+    // Fix 2026-09-21: appDistributionUploadRelease started failing with
+    // "Could not find credentials" -- the plugin stopped reliably reading the
+    // Firebase CLI's cached `firebase login` session (Asok confirmed he was
+    // still logged in via the CLI, yet the build kept failing). Switched to an
+    // explicit service account key instead, the same way this file already
+    // keeps the release-signing credentials out of git via local.properties
+    // (see releaseSigningProps above). The key itself
+    // (app/firebase-service-account.json) is gitignored -- never commit it.
+    val serviceAccountFileName = releaseSigningProps.getProperty("FIREBASE_SERVICE_ACCOUNT_FILE")
+    if (serviceAccountFileName != null) {
+        serviceCredentialsFile = file(serviceAccountFileName).absolutePath
+    }
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
@@ -52,6 +94,8 @@ dependencies {
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.fragment.ktx)
+    // Two-way Google Calendar sync reconciliation (see data/calendar/CalendarSyncScheduler.kt)
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
     // Google Sign-In + Drive account connector (Settings > Account)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)

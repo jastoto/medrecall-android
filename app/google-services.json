@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "473244620776",
+    "project_id": "medrecall-android-d93fd",
+    "storage_bucket": "medrecall-android-d93fd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:473244620776:android:8d2880859414d510f3765d",
+        "android_client_info": {
+          "package_name": "com.asok.medrecall"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUDi34Nqv0NzBZ4pYl3EFm4DnTjXw5eqs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

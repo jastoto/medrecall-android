@@ -92,7 +92,9 @@ object BackupImporter {
                                 tertiaryValue = o.optDoubleOrNull("tertiaryValue"),
                                 context = o.optStringOrNull("context"),
                                 notes = o.optStringOrNull("notes"),
-                                source = o.optString("source", "MANUAL")
+                                source = o.optString("source", "MANUAL"),
+                                customLabel = o.optStringOrNull("customLabel"),
+                                customUnit = o.optStringOrNull("customUnit")
                             )
                         )
                     }

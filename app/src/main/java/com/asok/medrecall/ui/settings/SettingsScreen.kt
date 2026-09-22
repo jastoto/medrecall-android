@@ -47,6 +47,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.asok.medrecall.BuildConfig
 import com.asok.medrecall.data.calendar.DeviceCalendarInfo
 import com.asok.medrecall.data.calendar.DeviceCalendarManager
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.filled.Sync
 import com.asok.medrecall.ui.components.MedRecallTopBar
 
 /**
@@ -71,6 +74,7 @@ fun SettingsScreen(
     val pinEnabled by viewModel.pinEnabled.collectAsState()
     val syncCalendar by viewModel.syncCalendar.collectAsState()
     val availableCalendars by viewModel.availableCalendars.collectAsState()
+    val calendarSyncIntervalMinutes by viewModel.calendarSyncIntervalMinutes.collectAsState()
 
     var showNoBiometricsDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -78,6 +82,7 @@ fun SettingsScreen(
     var showNoCalendarPermission by remember { mutableStateOf(false) }
     var pendingCalendarSwitch by remember { mutableStateOf<DeviceCalendarInfo?>(null) }
     var pendingTurnOff by remember { mutableStateOf(false) }
+    var showSyncFrequencyPicker by remember { mutableStateOf(false) }
 
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -151,6 +156,20 @@ fun SettingsScreen(
                         )
                     }
                     SettingsCaption("Pick one calendar already on this phone (Google, Office/Outlook, or a local calendar) to keep your appointments synced to.")
+                }
+            }
+
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SettingsGroup {
+                        SettingsRow(
+                            icon = Icons.Default.Sync,
+                            title = "Google Calendar Sync Frequency",
+                            subtitle = describeSyncInterval(calendarSyncIntervalMinutes),
+                            onClick = { showSyncFrequencyPicker = true }
+                        )
+                    }
+                    SettingsCaption("How often MedRecall+ checks Google Calendar for changes made there (edits or deletions of appointments it created) and pulls them in. It also always checks when you open the app.")
                 }
             }
 
@@ -321,6 +340,17 @@ fun SettingsScreen(
         )
     }
 
+    if (showSyncFrequencyPicker) {
+        SyncFrequencyPickerDialog(
+            current = calendarSyncIntervalMinutes,
+            onSelect = { minutes ->
+                viewModel.setCalendarSyncInterval(context, minutes)
+                showSyncFrequencyPicker = false
+            },
+            onDismiss = { showSyncFrequencyPicker = false }
+        )
+    }
+
     if (showCalendarPicker) {
         CalendarPickerDialog(
             calendars = availableCalendars,
@@ -384,4 +414,47 @@ fun SettingsScreen(
             }
         )
     }
+}
+
+private val syncIntervalOptions = listOf(
+    15L to "Every 15 minutes",
+    60L to "Every hour",
+    240L to "Every 4 hours",
+    1440L to "Once a day"
+)
+
+private fun describeSyncInterval(minutes: Long): String =
+    syncIntervalOptions.firstOrNull { it.first == minutes }?.second ?: "Every $minutes minutes"
+
+@Composable
+private fun SyncFrequencyPickerDialog(
+    current: Long,
+    onSelect: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Google Calendar Sync Frequency") },
+        text = {
+            Column {
+                syncIntervalOptions.forEach { (minutes, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(minutes) }
+                            .padding(vertical = 12.dp)
+                    ) {
+                        Text(
+                            text = if (minutes == current) "$label (current)" else label,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

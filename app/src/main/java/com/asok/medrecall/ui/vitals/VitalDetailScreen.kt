@@ -50,6 +50,7 @@ fun VitalDetailScreen(
     onAddReading: () -> Unit,
     onEditReading: (Int) -> Unit,
     onGoHome: () -> Unit,
+    onGoBack: () -> Unit,
     viewModel: VitalsViewModel = viewModel(factory = VitalsViewModel.factory(LocalContext.current, vitalType.id))
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -70,6 +71,7 @@ fun VitalDetailScreen(
             MedRecallTopBar(
                 title = vitalType.title,
                 onGoHome = onGoHome,
+                onGoBack = onGoBack,
                 actions = {
                     IconButton(onClick = onAddReading) {
                         Icon(Icons.Default.Add, contentDescription = "Log a reading")
@@ -90,7 +92,7 @@ fun VitalDetailScreen(
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.weight(1f)
                     )
-                    Button(onClick = { permissionLauncher.launch(setOf(vitalType.healthConnectReadPermission)) }) {
+                    Button(onClick = { vitalType.healthConnectReadPermission?.let { permissionLauncher.launch(setOf(it)) } }) {
                         Text("Connect")
                     }
                 }
@@ -175,6 +177,8 @@ private fun formatReadingValue(type: VitalType, reading: VitalReadingDisplay): S
     VitalType.BLOOD_OXYGEN -> "${reading.primaryValue.toInt()}%"
     VitalType.RESPIRATORY_RATE -> "${formatNumber(reading.primaryValue)} breaths/min"
     VitalType.BODY_TEMPERATURE -> "${formatNumber(reading.primaryValue)}°F"
+    VitalType.A1C -> "${formatNumber(reading.primaryValue)}%"
+    VitalType.CHOLESTEROL -> "${reading.primaryValue.toInt()} mg/dL"
 }
 
 internal fun formatNumber(value: Double): String =

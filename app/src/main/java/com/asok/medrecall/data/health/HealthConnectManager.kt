@@ -42,7 +42,7 @@ object HealthConnectManager {
     fun getClient(context: Context): HealthConnectClient = HealthConnectClient.getOrCreate(context)
 
     /** Every read permission MedRecall ever asks Health Connect for, in one shot. */
-    val allReadPermissions: Set<String> = VitalType.entries.map { it.healthConnectReadPermission }.toSet()
+    val allReadPermissions: Set<String> = VitalType.entries.mapNotNull { it.healthConnectReadPermission }.toSet()
 
     private suspend fun grantedPermissions(client: HealthConnectClient): Set<String> = try {
         client.permissionController.getGrantedPermissions()
@@ -50,8 +50,10 @@ object HealthConnectManager {
         emptySet()
     }
 
-    suspend fun hasPermission(client: HealthConnectClient, vitalType: VitalType): Boolean =
-        grantedPermissions(client).contains(vitalType.healthConnectReadPermission)
+    suspend fun hasPermission(client: HealthConnectClient, vitalType: VitalType): Boolean {
+        val permission = vitalType.healthConnectReadPermission ?: return true // no HC data type for this vital -- treat as satisfied so no banner is shown
+        return grantedPermissions(client).contains(permission)
+    }
 
     suspend fun hasAllPermissions(client: HealthConnectClient): Boolean =
         grantedPermissions(client).containsAll(allReadPermissions)
@@ -137,6 +139,10 @@ object HealthConnectManager {
                         source = "HEALTH_CONNECT"
                     )
                 }
+                // A1C and Cholesterol have no corresponding Health Connect record type
+                // as of this writing -- manual-only, see VitalType.kt.
+                VitalType.A1C -> emptyList()
+                VitalType.CHOLESTEROL -> emptyList()
             }
         } catch (e: Exception) {
             emptyList()

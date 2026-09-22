@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,8 +41,8 @@ fun RaisedIconTile(
     cornerRadius: Dp = 28.dp,
     tileSize: Dp? = null,
     elevation: Dp = 18.dp,
-    labelStyle: TextStyle = MaterialTheme.typography.bodyMedium,
-    labelColor: Color = MaterialTheme.colorScheme.onBackground,
+    labelStyle: TextStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+    labelColor: Color = Color(0xFF000000),
     labelMaxLines: Int = 1,
     labelTopPadding: Dp = 8.dp
 ) {

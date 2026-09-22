@@ -67,6 +67,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val GOOGLE_DRIVE_CONNECTED = booleanPreferencesKey("google_drive_connected")
         val MICROSOFT_ACCOUNT_EMAIL = stringPreferencesKey("microsoft_account_email")
         val MICROSOFT_ACCOUNT_NAME = stringPreferencesKey("microsoft_account_name")
+        val CALENDAR_SYNC_INTERVAL_MINUTES = longPreferencesKey("calendar_sync_interval_minutes")
     }
 
     val biometricLockEnabled: Flow<Boolean> =
@@ -202,6 +203,19 @@ class SettingsRepository private constructor(private val context: Context) {
             prefs.remove(Keys.MICROSOFT_ACCOUNT_EMAIL)
             prefs.remove(Keys.MICROSOFT_ACCOUNT_NAME)
         }
+    }
+
+    /**
+     * How often the two-way Google Calendar reconciliation pass runs in the
+     * background (see data/calendar/CalendarSyncScheduler.kt), in minutes.
+     * Defaults to 15 -- the OS floor for periodic WorkManager work anyway.
+     * A pass also always runs on app foreground/resume regardless of this.
+     */
+    val calendarSyncIntervalMinutes: Flow<Long> =
+        context.settingsDataStore.data.map { it[Keys.CALENDAR_SYNC_INTERVAL_MINUTES] ?: 15L }
+
+    suspend fun setCalendarSyncIntervalMinutes(minutes: Long) {
+        context.settingsDataStore.edit { it[Keys.CALENDAR_SYNC_INTERVAL_MINUTES] = minutes }
     }
 
     /** Wipes every stored setting -- used by Danger Zone > Delete All Data. */

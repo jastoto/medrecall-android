@@ -46,7 +46,7 @@ class GoogleCalendarService(private val context: Context) {
     suspend fun signedInAccountLabel(): String? = prefs.getString(KEY_ACCOUNT, null)
 
     suspend fun signOut() {
-        prefs.edit().remove(KEY_ACCOUNT).remove(KEY_CALENDAR_ID).remove(KEY_CALENDAR_NAME).apply()
+        prefs.edit().remove(KEY_ACCOUNT).remove(KEY_CALENDAR_ID).remove(KEY_CALENDAR_NAME).remove(KEY_SYNC_TOKEN).apply()
     }
 
     fun selectedCalendarId(): String? = prefs.getString(KEY_CALENDAR_ID, null)
@@ -57,6 +57,9 @@ class GoogleCalendarService(private val context: Context) {
         prefs.edit()
             .putString(KEY_CALENDAR_ID, calendar.id)
             .putString(KEY_CALENDAR_NAME, calendar.name)
+            // A sync token is scoped to one calendar -- switching calendars
+            // invalidates whatever incremental-sync cursor we had.
+            .remove(KEY_SYNC_TOKEN)
             .apply()
     }
 
@@ -79,6 +82,86 @@ class GoogleCalendarService(private val context: Context) {
                     isPrimary = cal.optBoolean("primary", false)
                 )
             }
+        }
+    }
+
+    /**
+     * Incremental sync: fetches every event that changed (edited, or
+     * deleted -- Google reports deletions as status "cancelled") on the
+     * selected calendar since the last call, using Google Calendar's
+     * syncToken so this doesn't have to re-fetch and re-check every synced
+     * event on every reconciliation pass. The very first call (no stored
+     * token yet) establishes a baseline token without reporting any deltas
+     * -- there's nothing to "change from" yet, so treating every existing
+     * event as a delta on that first pass would be a false positive.
+     *
+     * If the stored token has expired or is otherwise rejected by Google
+     * (HTTP 410), it's discarded and this falls back to establishing a
+     * fresh baseline, same as a first call.
+     */
+    suspend fun fetchChangedEvents(): Result<List<GoogleCalendarEventDelta>> = runCatching {
+        withContext(Dispatchers.IO) {
+            val calendarId = selectedCalendarId() ?: throw NotReadyToSyncException()
+            val token = accessToken()
+            var syncToken = prefs.getString(KEY_SYNC_TOKEN, null)
+            var isBaselineOnlyPass = syncToken == null
+            var pageToken: String? = null
+            var triedFreshBaseline = false
+            val deltas = mutableListOf<GoogleCalendarEventDelta>()
+
+            while (true) {
+                val url = StringBuilder("$CALENDAR_URL/${encode(calendarId)}/events?showDeleted=true&maxResults=250")
+                pageToken?.let { url.append("&pageToken=${encode(it)}") }
+                syncToken?.let { url.append("&syncToken=${encode(it)}") }
+                val connection = (URL(url.toString()).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    setRequestProperty("Authorization", "Bearer $token")
+                }
+                val code = connection.responseCode
+                if (code == 410) {
+                    if (triedFreshBaseline) throw IOException("Google Calendar sync token repeatedly rejected")
+                    triedFreshBaseline = true
+                    syncToken = null
+                    pageToken = null
+                    isBaselineOnlyPass = true
+                    deltas.clear()
+                    continue
+                }
+                if (code !in 200..299) connection.throwForError(code)
+                val body = connection.inputStream.let { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() }
+                val json = JSONObject(body)
+                if (!isBaselineOnlyPass) {
+                    val items = json.optJSONArray("items")
+                    if (items != null) {
+                        for (i in 0 until items.length()) {
+                            val item = items.getJSONObject(i)
+                            val updatedAt = item.optStringOrNull("updated")?.let { Instant.parse(it).toEpochMilli() } ?: continue
+                            if (item.optString("status") == "cancelled") {
+                                deltas.add(GoogleCalendarEventDelta(id = item.getString("id"), cancelled = true, updatedAtMillis = updatedAt))
+                            } else {
+                                val startMillis = item.optJSONObject("start")?.optStringOrNull("dateTime")?.let { Instant.parse(it).toEpochMilli() }
+                                deltas.add(
+                                    GoogleCalendarEventDelta(
+                                        id = item.getString("id"),
+                                        cancelled = false,
+                                        updatedAtMillis = updatedAt,
+                                        summary = item.optStringOrNull("summary"),
+                                        description = item.optStringOrNull("description"),
+                                        location = item.optStringOrNull("location"),
+                                        startMillis = startMillis
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+                pageToken = json.optStringOrNull("nextPageToken")
+                if (pageToken == null) {
+                    json.optStringOrNull("nextSyncToken")?.let { prefs.edit().putString(KEY_SYNC_TOKEN, it).apply() }
+                    break
+                }
+            }
+            deltas
         }
     }
 
@@ -184,6 +267,7 @@ class GoogleCalendarService(private val context: Context) {
         private const val KEY_ACCOUNT = "account_email"
         private const val KEY_CALENDAR_ID = "calendar_id"
         private const val KEY_CALENDAR_NAME = "calendar_name"
+        private const val KEY_SYNC_TOKEN = "calendar_sync_token"
         private const val CALENDAR_URL = "https://www.googleapis.com/calendar/v3/calendars"
         private const val DEFAULT_DURATION_MINUTES = 30L
         const val READONLY_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
@@ -192,3 +276,7 @@ class GoogleCalendarService(private val context: Context) {
 }
 
 class NotSignedInException : Exception("Not signed in to Google Calendar.")
+
+/** org.json.JSONObject.optString() returns "" for a missing/null key by default -- this distinguishes "absent" from "empty string". */
+private fun JSONObject.optStringOrNull(name: String): String? = if (has(name) && !isNull(name)) getString(name) else null
+

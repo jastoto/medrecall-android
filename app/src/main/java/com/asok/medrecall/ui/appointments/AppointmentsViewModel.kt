@@ -72,6 +72,14 @@ class AppointmentsViewModel(
 
     suspend fun addDoctor(doctor: Doctor): Int = repository.addDoctor(doctor).toInt()
 
+    /** Appointments whose linked Google Calendar event was deleted on Google's side -- backs the one-time confirmation dialog. */
+    val pendingGoogleDeletions: StateFlow<List<Appointment>> = repository.observePendingGoogleDeletions()
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
+    suspend fun confirmGoogleDeletion(appointment: Appointment) = repository.confirmGoogleDeletion(appointment)
+
+    suspend fun dismissGoogleDeletion(appointment: Appointment) = repository.dismissGoogleDeletion(appointment)
+
     companion object {
         fun factory(context: Context): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")

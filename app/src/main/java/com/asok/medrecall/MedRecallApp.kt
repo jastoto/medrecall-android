@@ -23,6 +23,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.asok.medrecall.data.calendar.CalendarSyncScheduler
+import com.asok.medrecall.data.settings.SettingsRepository
+import kotlinx.coroutines.flow.first
 import com.asok.medrecall.navigation.Destination
 import com.asok.medrecall.ui.MedRecallBottomBar
 import com.asok.medrecall.ui.appointments.AppointmentFormScreen
@@ -31,6 +34,8 @@ import com.asok.medrecall.ui.appointments.PastAppointmentsScreen
 import com.asok.medrecall.ui.ask.AskMedRecallScreen
 import com.asok.medrecall.ui.conditions.ConditionFormScreen
 import com.asok.medrecall.ui.conditions.ConditionsScreen
+import com.asok.medrecall.ui.health.CustomReadingFormScreen
+import com.asok.medrecall.ui.health.HealthScreen
 import com.asok.medrecall.ui.doctors.DoctorFormScreen
 import com.asok.medrecall.ui.doctors.DoctorsScreen
 import com.asok.medrecall.ui.help.HelpDetailScreen
@@ -81,11 +86,25 @@ fun MedRecallApp() {
 
     val appLockViewModel: AppLockViewModel = viewModel(factory = AppLockViewModel.factory(LocalContext.current))
     val lockState by appLockViewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    // Two-way Google Calendar sync (see calendar-two-way-sync-scope.md):
+    // the periodic reconciliation pass is (re-)scheduled once at startup
+    // using whatever interval is saved in Settings, and an immediate pass
+    // also runs below every time the app comes to the foreground.
+    LaunchedEffect(Unit) {
+        val minutes = SettingsRepository.getInstance(context).calendarSyncIntervalMinutes.first()
+        CalendarSyncScheduler.schedulePeriodic(context, minutes)
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) appLockViewModel.relock()
+            when (event) {
+                Lifecycle.Event.ON_STOP -> appLockViewModel.relock()
+                Lifecycle.Event.ON_RESUME -> CalendarSyncScheduler.syncNow(context)
+                else -> {}
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -206,7 +225,8 @@ private fun MedRecallNavHost() {
                     vitalType = vitalType,
                     onAddReading = { navController.navigate("vital_form/${vitalType.id}") },
                     onEditReading = { id -> navController.navigate("vital_form/${vitalType.id}/$id") },
-                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) },
+                    onGoBack = { navController.popBackStack() }
                 )
             }
             composable(
@@ -217,7 +237,8 @@ private fun MedRecallNavHost() {
                 VitalEntryFormScreen(
                     vitalType = vitalType,
                     readingId = null,
-                    onDone = { navController.popBackStack() }
+                    onDone = { navController.popBackStack() },
+                    onGoBack = { navController.popBackStack() }
                 )
             }
             composable(
@@ -232,11 +253,38 @@ private fun MedRecallNavHost() {
                 VitalEntryFormScreen(
                     vitalType = vitalType,
                     readingId = readingId,
-                    onDone = { navController.popBackStack() }
+                    onDone = { navController.popBackStack() },
+                    onGoBack = { navController.popBackStack() }
                 )
             }
             composable(Destination.Health.route) {
-                StubScreen(Destination.Health.label, onGoHome = { navController.popBackStack(Destination.Home.route, false) })
+                HealthScreen(
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) },
+                    onLogReading = { vitalType -> navController.navigate("vital_form/${vitalType.id}") },
+                    onLogCustomReading = { navController.navigate("custom_reading_form") },
+                    onOpenReadingHistory = { vitalType -> navController.navigate("vital_detail/${vitalType.id}") },
+                    onAddCondition = { navController.navigate("condition_form") },
+                    onEditCondition = { id -> navController.navigate("condition_form/$id") },
+                    onEditCustomReading = { id -> navController.navigate("custom_reading_form/$id") }
+                )
+            }
+            composable("custom_reading_form") {
+                CustomReadingFormScreen(
+                    readingId = null,
+                    onDone = { navController.popBackStack() },
+                    onGoBack = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "custom_reading_form/{readingId}",
+                arguments = listOf(navArgument("readingId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val readingId = backStackEntry.arguments?.getInt("readingId")
+                CustomReadingFormScreen(
+                    readingId = readingId,
+                    onDone = { navController.popBackStack() },
+                    onGoBack = { navController.popBackStack() }
+                )
             }
             composable(Destination.Conditions.route) {
                 ConditionsScreen(
@@ -273,7 +321,8 @@ private fun MedRecallNavHost() {
                     onAddAppointment = { navController.navigate("appointment_form") },
                     onEditAppointment = { id -> navController.navigate("appointment_form/$id") },
                     onViewPastAppointments = { navController.navigate("past_appointments") },
-                    onGoHome = { navController.popBackStack(Destination.Home.route, false) }
+                    onGoHome = { navController.popBackStack(Destination.Home.route, false) },
+                    onGoBack = { navController.popBackStack() }
                 )
             }
             composable("past_appointments") {

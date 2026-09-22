@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.MonitorWeight
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Warning
@@ -30,23 +31,31 @@ import androidx.health.connect.client.records.WeightRecord
  * these stable once shipped.
  *
  * Every vital here supports BOTH manual entry (this app's own Room table,
- * see VitalReading.kt) and Health Connect (Android's closest equivalent
- * to Apple Health/Apple Watch -- Samsung Health and most watches sync
- * into it): healthConnectReadPermission is the exact permission string
+ * see VitalReading.kt) and, where a Health Connect data type actually
+ * exists for it, Health Connect too (Android's closest equivalent to
+ * Apple Health/Apple Watch -- Samsung Health and most watches sync into
+ * it): healthConnectReadPermission is the exact permission string
  * HealthConnectManager requests/checks for this vital, used to pull
  * automatic readings on top of whatever's logged by hand. MedRecall only
  * ever reads from Health Connect, never writes to it.
  *
+ * healthConnectReadPermission is nullable: A1C and Cholesterol (added for
+ * the Health page, punch item #13) have no corresponding Health Connect
+ * record type as of this writing, so they're manual-only -- see
+ * VitalsViewModel.refreshHealthConnect and HealthConnectManager for how a
+ * null permission is handled (no banner shown, no crash).
+ *
  * Steps, Distance, and Sleep are deliberately NOT here -- those belong to
  * the separate Activity & Fitness and Sleep categories Asok defined,
- * planned for later sessions; this pass covers just his "Vitals" list.
+ * planned for later sessions; this pass covers just his "Vitals" list
+ * plus the two manual-only additions the Health page needed.
  */
 enum class VitalType(
     val id: String,
     val title: String,
     val icon: ImageVector,
     val tileColors: List<Color>,
-    val healthConnectReadPermission: String
+    val healthConnectReadPermission: String?
 ) {
     BLOOD_PRESSURE(
         "blood_pressure", "Blood Pressure", Icons.Filled.MonitorHeart,
@@ -92,6 +101,16 @@ enum class VitalType(
         "body_temperature", "Body Temperature", Icons.Filled.Thermostat,
         listOf(Color(0xFFF2B84B), Color(0xFFD3922A)),
         HealthPermission.getReadPermission(BodyTemperatureRecord::class)
+    ),
+    A1C(
+        "a1c", "A1C", Icons.Filled.Science,
+        listOf(Color(0xFFD08CE8), Color(0xFFA354BF)),
+        null
+    ),
+    CHOLESTEROL(
+        "cholesterol", "Cholesterol", Icons.Filled.Science,
+        listOf(Color(0xFFE0C24D), Color(0xFFB89A2A)),
+        null
     );
 
     companion object {
@@ -99,7 +118,25 @@ enum class VitalType(
     }
 }
 
-val trackedVitals = VitalType.entries.toList()
+/**
+ * The 9 vitals shown on the existing Vitals grid screen (VitalsScreen.kt)
+ * -- deliberately an explicit list, NOT VitalType.entries, so that adding
+ * A1C/Cholesterol for the new Health page (punch item #13) doesn't also
+ * silently add two more tiles to Vitals. Per Asok's call: Vitals stays
+ * exactly as it is; Health is a separate screen that happens to read/write
+ * the same underlying VitalReading data for the types they share.
+ */
+val trackedVitals = listOf(
+    VitalType.BLOOD_PRESSURE,
+    VitalType.WEIGHT,
+    VitalType.BLOOD_GLUCOSE,
+    VitalType.HEART_RATE,
+    VitalType.RESTING_HEART_RATE,
+    VitalType.HEART_RATE_VARIABILITY,
+    VitalType.BLOOD_OXYGEN,
+    VitalType.RESPIRATORY_RATE,
+    VitalType.BODY_TEMPERATURE
+)
 
 /**
  * What's left of iOS's "FOR USE WITH A WATCH" row after Blood Oxygen, HRV,

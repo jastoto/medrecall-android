@@ -71,6 +71,8 @@ object BackupExporter {
                         putIfNotNull("context", v.context)
                         putIfNotNull("notes", v.notes)
                         put("source", v.source)
+                        putIfNotNull("customLabel", v.customLabel)
+                        putIfNotNull("customUnit", v.customUnit)
                     })
                 }
                 root.put("items", items)

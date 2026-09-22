@@ -6,6 +6,7 @@ import com.asok.medrecall.data.local.dao.DoctorDao
 import com.asok.medrecall.data.local.dao.MedicationDao
 import com.asok.medrecall.data.local.dao.NoteDao
 import com.asok.medrecall.data.local.dao.PatientDao
+import com.asok.medrecall.data.local.CUSTOM_VITAL_TYPE
 import com.asok.medrecall.data.local.dao.VitalReadingDao
 import com.asok.medrecall.ui.vitals.VitalType
 import kotlinx.coroutines.async
@@ -130,16 +131,33 @@ class SearchRepository(
             }
 
             vitalReadings.await().forEach { reading ->
-                val vitalType = VitalType.fromId(reading.type)
-                if (matches(normalizedQuery, vitalType.title, reading.context, reading.notes)) {
-                    results += SearchResult(
-                        id = "vital_${reading.id}",
-                        category = SearchCategory.VITAL,
-                        title = vitalType.title,
-                        subtitle = listOfNotNull(reading.context, formatMillis(reading.recordedAt))
-                            .joinToString(" · "),
-                        route = "vital_detail/${vitalType.id}"
-                    )
+                // Custom readings (Health page, punch item #13) aren't a real VitalType --
+                // VitalType.fromId() would silently fall back to Blood Pressure for
+                // "custom" and mislabel/misroute them, so handle that case separately.
+                if (reading.type == CUSTOM_VITAL_TYPE) {
+                    val title = reading.customLabel ?: "Custom reading"
+                    if (matches(normalizedQuery, title, reading.notes)) {
+                        results += SearchResult(
+                            id = "vital_${reading.id}",
+                            category = SearchCategory.VITAL,
+                            title = title,
+                            subtitle = listOfNotNull(reading.customUnit, formatMillis(reading.recordedAt))
+                                .joinToString(" · "),
+                            route = "custom_reading_form/${reading.id}"
+                        )
+                    }
+                } else {
+                    val vitalType = VitalType.fromId(reading.type)
+                    if (matches(normalizedQuery, vitalType.title, reading.context, reading.notes)) {
+                        results += SearchResult(
+                            id = "vital_${reading.id}",
+                            category = SearchCategory.VITAL,
+                            title = vitalType.title,
+                            subtitle = listOfNotNull(reading.context, formatMillis(reading.recordedAt))
+                                .joinToString(" · "),
+                            route = "vital_detail/${vitalType.id}"
+                        )
+                    }
                 }
             }
 

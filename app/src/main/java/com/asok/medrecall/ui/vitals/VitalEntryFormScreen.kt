@@ -60,6 +60,7 @@ fun VitalEntryFormScreen(
     vitalType: VitalType,
     readingId: Int?,
     onDone: () -> Unit,
+    onGoBack: () -> Unit,
     viewModel: VitalsViewModel = viewModel(factory = VitalsViewModel.factory(LocalContext.current, vitalType.id))
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -111,7 +112,7 @@ fun VitalEntryFormScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(if (readingId == null) "Log ${vitalType.title}" else "Edit ${vitalType.title}", fontWeight = FontWeight.Bold) },
-                navigationIcon = { BackIconButton(onClick = onDone) },
+                navigationIcon = { BackIconButton(onClick = onGoBack) },
                 actions = {
                     SaveIconButton(
                         enabled = isValid,
@@ -264,6 +265,20 @@ fun VitalEntryFormScreen(
                     onValueChange = { primaryText = it },
                     label = { Text("Body Temperature (°F)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                )
+                VitalType.A1C -> OutlinedTextField(
+                    value = primaryText,
+                    onValueChange = { primaryText = it },
+                    label = { Text("A1C (%)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                )
+                VitalType.CHOLESTEROL -> OutlinedTextField(
+                    value = primaryText,
+                    onValueChange = { primaryText = it },
+                    label = { Text("Total Cholesterol (mg/dL)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
                 )
             }

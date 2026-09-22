@@ -17,6 +17,13 @@ import androidx.room.PrimaryKey
  *    "Before Meal" / "After Meal" / "Other"
  *  - Steps: primaryValue = step count
  *  - Sleep: primaryValue = hours slept
+ *  - A1C: primaryValue = percent
+ *  - Cholesterol: primaryValue = total cholesterol (mg/dL)
+ *  - Custom (Health page, punch item #13): type = "custom", primaryValue =
+ *    whatever number was typed, customLabel = the user-typed name for this
+ *    one-off reading (e.g. "Peak Flow"), customUnit = the user-typed unit
+ *    (e.g. "L/min"). Each custom entry stands alone -- there's no shared
+ *    "Peak Flow" type to group future entries under, per Asok's call.
  *
  * source is reserved for a future Health Connect sync (Android's closest
  * equivalent to Apple Health/Apple Watch data) -- everything logged today
@@ -33,5 +40,10 @@ data class VitalReading(
     val tertiaryValue: Double? = null,
     val context: String? = null,
     val notes: String? = null,
-    val source: String = "MANUAL"
+    val source: String = "MANUAL",
+    val customLabel: String? = null,
+    val customUnit: String? = null
 )
+
+/** type value for one-off custom readings logged from the Health page (punch item #13). */
+const val CUSTOM_VITAL_TYPE = "custom"
