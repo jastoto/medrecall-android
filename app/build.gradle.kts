@@ -28,9 +28,28 @@ android {
         minSdk = 26
         targetSdk = 37
         versionCode = 8
-        versionName = "2.7"
+        versionName = "2.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Toolchain-verification checkpoint (2026-09-24) -- see
+        // app/src/main/cpp/CMakeLists.txt. arm64-v8a + armeabi-v7a cover real
+        // Android phones (including Asok's Samsung); x86_64 kept for the
+        // emulator. Once whisper.cpp is added, revisit whether all four ABIs
+        // are worth shipping (each one adds to APK size).
+        externalNativeBuild {
+            cmake {
+                cppFlags += ""
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     signingConfigs {

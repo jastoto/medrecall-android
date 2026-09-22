@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
+import com.asok.medrecall.data.transcription.NativeTranscriber
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -120,6 +122,21 @@ fun RecordVisitScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+
+    // Toolchain-verification checkpoint (2026-09-24): confirms the new
+    // native-bridge library actually loads and links on a real device/build,
+    // not just that Gradle/CMake compiled it. Check Logcat for tag
+    // "NativeTranscriber" after opening this screen -- "native ok" means the
+    // whole Gradle -> CMake -> NDK -> JNI -> Kotlin pipeline works end to end,
+    // clearing the way to build whisper.cpp on top of it. Remove this
+    // LaunchedEffect once that's confirmed and whisper.cpp work begins.
+    LaunchedEffect(Unit) {
+        try {
+            Log.d("NativeTranscriber", "nativeTestString() = ${NativeTranscriber.nativeTestString()}")
+        } catch (e: Throwable) {
+            Log.e("NativeTranscriber", "native-bridge failed to load/link", e)
+        }
+    }
 
     var doctorMenuExpanded by remember { mutableStateOf(false) }
     val doctorFieldInteractionSource = remember { MutableInteractionSource() }
